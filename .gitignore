@@ -1,0 +1,24 @@
+# 수집 데이터 (원본 배포 제한)
+data/raw/
+data/processed/
+*.png
+*.jpg
+*.jpeg
+!docs/**/*.png
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# 모델 가중치
+*.pt
+*.pth
+*.tflite
+*.onnx
+
+# 환경
+.env
+.DS_Store
