@@ -15,7 +15,8 @@ from .seeds import append_candidates, is_platform, read_seeds
 
 # DuckDuckGo HTML 엔드포인트는 헤드리스 브라우저에 403을 돌려주어(2026-09 확인) Yahoo 검색을 쓴다.
 SEARCH_URL = "https://search.yahoo.com/search?p={q}"
-SEARCH_RESULT_SELECTOR = "div.algo h3 a, div.compTitle h3 a"
+SEARCH_RESULT_SELECTOR = "#web h3 a, div.algo h3 a, div.compTitle h3 a"
+SEARCH_FALLBACK_SELECTOR = "#web a[href], #main a[href]"  # 광고형 레이아웃(카지노 키워드 등)에서 h3가 없을 때
 _ENGINE_HOSTS = ("yahoo.com", "yimg.com", "duckduckgo.com")
 
 
@@ -95,29 +96,34 @@ async def discover_community(settings: Settings, community_csv: Path, out_csv: P
 
 async def discover_search(settings: Settings, keywords_path: Path, out_csv: Path, known_domains: set[str],
                           per_keyword: int = 20) -> int:
+    """키워드마다 새 브라우저 컨텍스트를 쓴다. 같은 컨텍스트로 질의를 반복하면 Yahoo가 봇 확인 페이지로 보낸다."""
     keywords = [k.strip() for k in Path(keywords_path).read_text(encoding="utf-8").splitlines()
                 if k.strip() and not k.startswith("#")]
     added_total = 0
     async with async_playwright() as pw:
         browser = await open_browser(pw)
-        context = await new_context(pw, browser, settings)
-        page = await context.new_page(); attach_page_guards(page)
         try:
             for kw in keywords:
+                context = await new_context(pw, browser, settings)
                 try:
+                    page = await context.new_page(); attach_page_guards(page)
                     await page.goto(SEARCH_URL.format(q=quote(kw)), wait_until="load", timeout=settings.page_timeout_ms)
                     await page.wait_for_timeout(2000)
                     hrefs = await page.eval_on_selector_all(SEARCH_RESULT_SELECTOR, "els => els.map(e => e.href)")
+                    if not hrefs:
+                        hrefs = await page.eval_on_selector_all(SEARCH_FALLBACK_SELECTOR, "els => els.map(e => e.href)")
                     links = parse_search_links(hrefs)[:per_keyword]
                 except Exception as e:
                     print(f"[search] {kw}: {type(e).__name__}")
                     continue
+                finally:
+                    await context.close()
                 urls = external_domains_urls(links, "yahoo.com")
                 added = append_candidates(out_csv, urls, source=f"search:{kw}", known_domains=known_domains)
                 known_domains.update(registrable_domain(u) for u in added)
                 added_total += len(added)
                 print(f"[search] {kw}: 결과 {len(links)}개 중 {len(added)}개 추가")
-                await asyncio.sleep(3.0)
+                await asyncio.sleep(4.0)
         finally:
-            await context.close(); await browser.close()
+            await browser.close()
     return added_total
