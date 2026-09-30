@@ -13,7 +13,7 @@ from PIL import Image
 from playwright.async_api import BrowserContext, Page, TimeoutError as PWTimeout, async_playwright
 
 from .banners import BANNER_JS, filter_candidates, from_js, href_domain
-from .blocked import is_blocked_kr
+from .blocked import is_blocked_kr, is_challenge_page
 from .browser import USER_AGENT, attach_page_guards, new_context, open_browser
 from .config import Settings
 from .domains import normalize_url, registrable_domain
@@ -21,7 +21,7 @@ from .seeds import Seed, append_candidates
 from .store import Store, ahash, now_kst, ts_label
 
 LINK_KEYWORDS = ("event", "notice", "casino", "sports", "slot", "이벤트", "공지", "카지노", "스포츠", "슬롯")
-STATUSES = ("ok", "blocked_kr", "error", "duplicate", "robots_disallow")
+STATUSES = ("ok", "blocked_kr", "challenge", "error", "duplicate", "robots_disallow")
 RESET_MARKERS = ("ERR_CONNECTION_RESET", "ERR_CONNECTION_CLOSED", "ERR_SSL_PROTOCOL_ERROR")
 
 
@@ -128,6 +128,14 @@ async def capture_page(page: Page, url: str, *, label: str, seed_source: str, se
         if is_blocked_kr(page.url, body_text):
             meta["status"] = "blocked_kr"
             return meta, links, ext_hrefs
+        if is_challenge_page(await page.title(), body_text):
+            await page.wait_for_timeout(5000)  # Cloudflare 확인이 자동으로 풀리는 경우를 한 번 기다린다
+            body_text = await page.evaluate("document.body ? document.body.innerText.slice(0, 20000) : ''")
+            if is_challenge_page(await page.title(), body_text):
+                meta["status"] = "challenge"
+                meta["title"] = await page.title()
+                meta["error"] = "bot challenge or geo-block page; no content captured"
+                return meta, links, ext_hrefs
         try:
             await page.wait_for_load_state("networkidle", timeout=settings.idle_timeout_ms)
         except PWTimeout:

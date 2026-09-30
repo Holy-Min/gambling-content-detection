@@ -9,7 +9,7 @@ def test_summarize_counts_domains_pages_banners_per_label():
         {"label": "normal", "domain": "n.com", "status": "ok", "banners": [{}]},
     ]
     s = summarize(rows)
-    assert s["gambling"] == {"domains": 2, "ok": 1, "blocked_kr": 1, "error": 0, "duplicate": 1, "robots_disallow": 0, "banners": 2}
+    assert s["gambling"] == {"domains": 2, "ok": 1, "blocked_kr": 1, "challenge": 0, "error": 0, "duplicate": 1, "robots_disallow": 0, "banners": 2}
     assert s["normal"]["banners"] == 1 and s["normal"]["domains"] == 1
     table = format_table(s)
     assert "gambling" in table and "blocked_kr" in table

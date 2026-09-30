@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-STATUSES = ("ok", "blocked_kr", "error", "duplicate", "robots_disallow")
+STATUSES = ("ok", "blocked_kr", "challenge", "error", "duplicate", "robots_disallow")
 
 
 def summarize(rows: list[dict]) -> dict[str, dict]:
