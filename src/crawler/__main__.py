@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     dc = dk.add_parser("community", help="검증 커뮤니티 페이지의 외부 링크 수집")
     dc.add_argument("--seeds", default=str(SEEDS_DIR / "community_lists.csv"))
     dc.add_argument("--out", default=str(SEEDS_DIR / "candidates.csv"))
-    ds = dk.add_parser("search", help="DuckDuckGo HTML 검색 결과 수집")
+    ds = dk.add_parser("search", help="Yahoo 검색 결과 수집")
     ds.add_argument("--keywords", default=str(SEEDS_DIR / "keywords.txt"))
     ds.add_argument("--per-keyword", type=int, default=20)
     ds.add_argument("--out", default=str(SEEDS_DIR / "candidates.csv"))

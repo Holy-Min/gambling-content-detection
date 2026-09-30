@@ -1,11 +1,10 @@
-"""시드 확장: 검증 커뮤니티 페이지의 외부 링크, DuckDuckGo HTML 검색 결과."""
+"""시드 확장: 검증 커뮤니티 페이지의 외부 링크, Yahoo 검색 결과."""
 from __future__ import annotations
 
 import asyncio
-import html as htmllib
 import re
 from pathlib import Path
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 from playwright.async_api import async_playwright
 
@@ -14,20 +13,34 @@ from .config import Settings
 from .domains import registrable_domain
 from .seeds import append_candidates, is_platform, read_seeds
 
-DDG_URL = "https://html.duckduckgo.com/html/?q={q}&kl=kr-kr"
-_RESULT_A = re.compile(r'<a[^>]*class="[^"]*\bresult__a\b[^"]*"[^>]*href="([^"]+)"', re.I)
+# DuckDuckGo HTML 엔드포인트는 헤드리스 브라우저에 403을 돌려주어(2026-09 확인) Yahoo 검색을 쓴다.
+SEARCH_URL = "https://search.yahoo.com/search?p={q}"
+SEARCH_RESULT_SELECTOR = "div.algo h3 a, div.compTitle h3 a"
+_ENGINE_HOSTS = ("yahoo.com", "yimg.com", "duckduckgo.com")
 
 
-def parse_ddg_links(html: str) -> list[str]:
+def resolve_search_href(href: str) -> str | None:
+    """Yahoo 결과 링크를 실제 URL로. r.search.yahoo.com/...RU=<encoded>... 형태의 리다이렉트를 푼다."""
+    if not href.startswith(("http://", "https://")):
+        return None
+    parts = urlsplit(href)
+    if parts.hostname and parts.hostname.endswith("search.yahoo.com"):
+        m = re.search(r"/RU=([^/]+)/", parts.path)
+        if m:
+            target = unquote(m.group(1))
+            return target if target.startswith(("http://", "https://")) else None
+        return None
+    if any(parts.hostname and parts.hostname.endswith(h) for h in _ENGINE_HOSTS):
+        return None
+    return href
+
+
+def parse_search_links(hrefs: list[str]) -> list[str]:
     out: list[str] = []
-    for raw in _RESULT_A.findall(html):
-        href = htmllib.unescape(raw)
-        if href.startswith("//"):
-            href = "https:" + href
-        q = parse_qs(urlsplit(href).query)
-        target = q.get("uddg", [href])[0]
-        if target.startswith(("http://", "https://")) and target not in out:
-            out.append(target)
+    for h in hrefs:
+        t = resolve_search_href(h)
+        if t and t not in out:
+            out.append(t)
     return out
 
 
@@ -92,12 +105,14 @@ async def discover_search(settings: Settings, keywords_path: Path, out_csv: Path
         try:
             for kw in keywords:
                 try:
-                    await page.goto(DDG_URL.format(q=quote(kw)), wait_until="domcontentloaded", timeout=settings.page_timeout_ms)
-                    links = parse_ddg_links(await page.content())[:per_keyword]
+                    await page.goto(SEARCH_URL.format(q=quote(kw)), wait_until="load", timeout=settings.page_timeout_ms)
+                    await page.wait_for_timeout(2000)
+                    hrefs = await page.eval_on_selector_all(SEARCH_RESULT_SELECTOR, "els => els.map(e => e.href)")
+                    links = parse_search_links(hrefs)[:per_keyword]
                 except Exception as e:
                     print(f"[search] {kw}: {type(e).__name__}")
                     continue
-                urls = external_domains_urls(links, "duckduckgo.com")
+                urls = external_domains_urls(links, "yahoo.com")
                 added = append_candidates(out_csv, urls, source=f"search:{kw}", known_domains=known_domains)
                 known_domains.update(registrable_domain(u) for u in added)
                 added_total += len(added)

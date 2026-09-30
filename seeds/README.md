@@ -8,7 +8,7 @@
 | normal.csv | 뉴스·쇼핑·커뮤니티 일반 화면 | 사람이 직접 |
 | community_lists.csv | 검증 커뮤니티 페이지 (discover community 입력) | 사람이 직접 |
 | candidates.csv | 자동 발견 결과. **capture는 이 파일을 직접 읽지 않는다** | discover / capture --emit-candidates |
-| keywords.txt | discover search 키워드 | 사람이 직접 |
+| keywords.txt | discover search 키워드 (Yahoo 검색) | 사람이 직접 |
 | blocklist.txt | 어떤 경우에도 열지 않을 도메인 | 사람이 직접 |
 
 컬럼: `url,source,added_at,note`. 같은 등록 도메인은 첫 줄만 쓰인다.
