@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gambling-crawler"
+version = "0.1.0"
+description = "Mobile-viewport screenshot collector for the gambling content detection dataset"
+requires-python = ">=3.12"
+dependencies = ["playwright>=1.47", "tldextract>=5.1", "Pillow>=10.4"]
+
+[project.scripts]
+crawler = "crawler.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"
