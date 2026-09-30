@@ -34,6 +34,21 @@ notebooks/    실험 노트북
 references/   선행 연구 정리
 ```
 
+## 데이터 수집기 (src/crawler)
+
+모바일 뷰포트(Pixel 7 프로필, 412×915, DPR 2)로 페이지를 렌더링해 전체 화면 스크린샷 + 배너 크롭 + 메타데이터를 저장한다. 설계: `docs/superpowers/specs/2026-09-23-gambling-crawler-design.md`, 구현 계획: `docs/superpowers/plans/2026-09-30-gambling-crawler.md`.
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -e . && .venv/bin/playwright install chromium
+cp .env.example .env   # CRAWLER_SALT를 임의의 긴 문자열로 바꾼다
+.venv/bin/python -m crawler discover search            # 후보 → seeds/candidates.csv (사람이 검토해 gambling.csv로)
+.venv/bin/python -m crawler capture --label gambling --seeds seeds/gambling.csv
+.venv/bin/python -m crawler stats
+.venv/bin/pytest -q                                    # 단위 + 로컬 픽스처 통합 테스트
+```
+
+결과는 저장소 밖 `/Users/seongmin/Downloads/논문 관련/dataset/<label>/<도메인해시>/`에 쓰이고 `index.jsonl`이 전역 색인이다. 국내 망에서 차단된 도메인은 `blocked_kr`로 기록만 한다. 시드 작성법과 실행 순서는 `seeds/README.md`.
+
 ## 문서
 
 | 문서 | 내용 | 형식 |
