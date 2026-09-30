@@ -89,7 +89,7 @@ def append_candidates(path: Path, urls: Iterable[str], source: str, known_domain
     new_file = not path.exists()
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(f, lineterminator="\n")
         if new_file:
             writer.writerow(HEADER)
         writer.writerows(rows)
