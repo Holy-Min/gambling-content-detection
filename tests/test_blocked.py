@@ -24,4 +24,5 @@ def test_challenge_page_detection():
     assert is_challenge_page("잠시만 기다리십시오…", "stake.com 의 보안을 확인하는 중")
     assert is_challenge_page("Just a moment...", "")
     assert is_challenge_page("", "법적 사유로 이용 불가 이 서비스는 귀하의 지역에서 제공되지 않습니다")
+    assert is_challenge_page("Security Check", "4 + 1 = ? Attempt 1/30")
     assert not is_challenge_page("메가파워월드", "파워볼 실시간 배팅 첫 충전 보너스")
