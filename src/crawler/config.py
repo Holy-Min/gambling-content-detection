@@ -22,6 +22,9 @@ class Settings:
     settle_ms: int = 1_500
     max_page_height: int = 15_000
     device: str = "Pixel 7"
+    viewport_width: int = 412   # Playwright 기본 프로필(412×839, DPR 2.625)과 달리 스펙 값으로 고정
+    viewport_height: int = 915
+    dpr: int = 2
     delays: dict[str, float] = field(default_factory=lambda: {
         "gambling": 3.0, "embedded_banner": 3.0, "hard_negative": 5.0, "normal": 5.0})
     robots_labels: frozenset[str] = frozenset({"hard_negative", "normal"})

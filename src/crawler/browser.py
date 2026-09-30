@@ -36,6 +36,8 @@ def _dismiss_dialog(dialog) -> None:
 
 async def new_context(pw: Playwright, browser: Browser, settings: Settings) -> BrowserContext:
     device = dict(pw.devices[settings.device])
+    device["viewport"] = {"width": settings.viewport_width, "height": settings.viewport_height}
+    device["device_scale_factor"] = settings.dpr
     context = await browser.new_context(
         **device, locale="ko-KR", timezone_id="Asia/Seoul",
         accept_downloads=False, ignore_https_errors=True,
