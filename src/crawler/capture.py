@@ -5,9 +5,10 @@ import asyncio
 import time
 import urllib.robotparser
 from collections import defaultdict
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from PIL import Image
 from playwright.async_api import BrowserContext, Page, TimeoutError as PWTimeout, async_playwright
@@ -57,15 +58,83 @@ def pick_internal_links(hrefs: list[str], page_domain: str, current_url: str, n:
 def page_kind(url: str, title: str, body_text: str, idx: int) -> str:
     """라벨링에 쓸 페이지 종류. 결제 직전 화면(deposit)·가입(register)·로그인 벽(login)을 구분한다."""
     u = (url or "").lower(); t = (title or "").lower(); b = (body_text or "")[:3000].lower()
-    if any(k in u or k in t for k in PAY_KEYWORDS) or ("충전" in b and ("입금" in b or "계좌" in b or "상품권" in b)):
+    if any(k in u or k in t for k in PAY_KEYWORDS):
         return "deposit"
     if any(k in u or k in t for k in JOIN_KEYWORDS):
         return "register"
     if idx == 0:
-        return "home"
+        return "home"   # 홈 하단 탭에 '충전·입금' 글자가 있어도 홈은 홈이다(본문 규칙은 내부 페이지에만)
+    if "충전" in b and ("입금" in b or "계좌" in b or "상품권" in b):
+        return "deposit"
     if "로그인" in b and "비밀번호" in b and len(b) < 600:
         return "login"
     return "other"
+
+
+# 홈에서 보이는 짧은 글자의 클릭 요소를 모두 표시(data-crawler-menu=키)하고 돌려준다. 키워드 판별은 파이썬에서 한다.
+MENU_JS = r"""() => {
+  const out = [];
+  let key = 0;
+  for (const el of document.querySelectorAll('a, button, [role=button], [onclick], input[type=button], input[type=submit], li, span, div, p')) {
+    let text = (el.tagName === 'INPUT' ? el.value : el.innerText) || el.getAttribute('title') || el.getAttribute('aria-label') || '';
+    text = String(text).trim().replace(/\s+/g, ' ');
+    if (!text || text.length > 12) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 8 || r.height < 8) continue;
+    const st = getComputedStyle(el);
+    if (st.visibility === 'hidden' || st.display === 'none' || st.pointerEvents === 'none') continue;
+    el.setAttribute('data-crawler-menu', String(key));
+    out.push({key, text, tag: el.tagName.toLowerCase(), href: el.tagName === 'A' ? (el.href || '') : ''});
+    key++;
+  }
+  return out;
+}"""
+MENU_TEXT_MAX = 12
+
+
+@dataclass(frozen=True)
+class MenuTarget:
+    key: int            # data-crawler-menu 값
+    text: str
+    kind: str           # "deposit" | "register"
+    href: str | None    # 내부 URL이면 클릭 대신 그 주소로 이동, None이면 클릭
+
+
+def _menu_kind(text: str) -> str | None:
+    t = text.lower()
+    if any(k in t for k in PAY_KEYWORDS):
+        return "deposit"
+    if any(k in t for k in JOIN_KEYWORDS):
+        return "register"
+    return None
+
+
+def menu_targets(items: list[dict], page_domain: str) -> list[MenuTarget]:
+    """MENU_JS 결과에서 충전·입금·가입 메뉴를 고른다. 결제 메뉴 먼저, 같은 글자는 한 번(내부 href가 있는 a 우선), 외부 링크·긴 글은 제외."""
+    by_text: dict[str, MenuTarget] = {}
+    for it in items:
+        text = " ".join(str(it.get("text", "")).split())
+        if not text or len(text) > MENU_TEXT_MAX:
+            continue
+        kind = _menu_kind(text)
+        if kind is None:
+            continue
+        raw = str(it.get("href") or "")
+        href: str | None
+        if raw.startswith(("http://", "https://")):
+            if registrable_domain(raw) != page_domain:
+                continue   # 사이트 밖으로 나가는 메뉴는 따라가지 않는다
+            p = urlsplit(raw)
+            href = None if (p.path in ("", "/") and not p.query) else _strip_fragment(raw)   # '#'뿐인 링크는 JS 메뉴
+        elif raw == "" or raw.startswith(("javascript:", "#")):
+            href = None
+        else:
+            continue   # mailto:, tel: 등
+        t = MenuTarget(key=int(it["key"]), text=text, kind=kind, href=href)
+        prev = by_text.get(text)
+        if prev is None or (prev.href is None and t.href is not None):
+            by_text[text] = t
+    return sorted(by_text.values(), key=lambda t: 0 if t.kind == "deposit" else 1)
 
 
 @lru_cache(maxsize=1024)
@@ -94,7 +163,7 @@ def _empty_meta(*, label: str, seed_source: str, url: str, domain: str, store: S
             "url_norm": normalize_url(url), "final_url": None, "domain": domain, "domain_hash": dhash,
             "captured_at": at.isoformat(), "status": "error",
             "viewport": {"width": settings.viewport_width, "height": settings.viewport_height, "dpr": settings.dpr},
-            "title": None, "page_kind": None, "full_path": None, "page_height": None, "image_size": None, "phash": None, "banners": [], "error": None}
+            "title": None, "page_kind": None, "via": None, "full_path": None, "page_height": None, "image_size": None, "phash": None, "banners": [], "error": None}
 
 
 async def _scroll_through(page: Page, settings: Settings) -> int:
@@ -127,16 +196,19 @@ def _crop_banners(full_png: Path, cands, dpr: int, ddir: Path, stem: str, page_d
 
 
 async def capture_page(page: Page, url: str, *, label: str, seed_source: str, settings: Settings,
-                       store: Store, idx: int) -> tuple[dict, list[str], list[str]]:
-    """페이지 1개를 처리해 (meta, 내부 링크, 배너의 외부 href) 를 돌려준다. 예외는 meta.status=error로 삼킨다."""
+                       store: Store, idx: int, navigate: bool = True, full_page: bool = True,
+                       via: str | None = None, kind_hint: str | None = None) -> tuple[dict, list[str], list[str]]:
+    """페이지 1개를 처리해 (meta, 내부 링크, 배너의 외부 href) 를 돌려준다. 예외는 meta.status=error로 삼킨다.
+    navigate=False면 이미 열린 화면(메뉴 클릭 결과)을 그대로 캡처하고, full_page=False면 뷰포트만 찍는다(모달)."""
     domain = registrable_domain(url)
     meta = _empty_meta(label=label, seed_source=seed_source, url=url, domain=domain, store=store, idx=idx, settings=settings)
+    meta["via"] = via
     stem = meta["id"].split("_", 1)[1]
     ddir = store.domain_dir(label, domain)
     links: list[str] = []
     ext_hrefs: list[str] = []
     try:
-        for attempt in range(2):
+        for attempt in range(2 if navigate else 0):
             try:
                 await page.goto(url, wait_until="domcontentloaded", timeout=settings.page_timeout_ms)
                 break
@@ -163,9 +235,11 @@ async def capture_page(page: Page, url: str, *, label: str, seed_source: str, se
         meta["page_height"] = await _scroll_through(page, settings)
         meta["title"] = await page.title()
         meta["page_kind"] = page_kind(page.url, meta["title"], body_text, idx)
+        if meta["page_kind"] == "other" and kind_hint:
+            meta["page_kind"] = kind_hint   # 클릭한 메뉴 글자(충전·가입)로 보정
         ddir.mkdir(parents=True, exist_ok=True)
         full = ddir / f"{stem}_full.png"
-        await page.screenshot(path=str(full), full_page=True)
+        await page.screenshot(path=str(full), full_page=full_page)
         dpr = settings.dpr
         with Image.open(full) as im:
             if im.height > settings.max_page_height * dpr:
@@ -202,12 +276,92 @@ async def capture_page(page: Page, url: str, *, label: str, seed_source: str, se
     return meta, links, ext_hrefs
 
 
+_BODY_TEXT_JS = "document.body ? document.body.innerText.slice(0, 20000) : ''"
+
+
+async def _click_menu(page: Page, target: MenuTarget, *, domain: str, settings: Settings) -> str:
+    """메뉴를 클릭하고 결과를 돌려준다: navigated(주소 바뀜) · changed(모달·SPA 등 화면만 바뀜) · external(사이트 밖) · noop."""
+    before_url = page.url
+    before_text = await page.evaluate(_BODY_TEXT_JS)
+    # window.open 팝업은 새 창을 열지 않고 주소만 받아 같은 탭에서 연다(컨텍스트가 팝업을 곧바로 닫기 때문)
+    await page.evaluate("() => { window.open = (u) => { window.__crawlerPopup = u ? String(u) : ''; return null; }; }")
+    try:
+        await page.click(f'[data-crawler-menu="{target.key}"]', timeout=settings.idle_timeout_ms)
+    except Exception:
+        return "noop"
+    await page.wait_for_timeout(settings.settle_ms)
+    try:
+        await page.wait_for_load_state("networkidle", timeout=settings.idle_timeout_ms)
+    except PWTimeout:
+        pass
+    try:
+        popup = str(await page.evaluate("window.__crawlerPopup || ''"))
+    except Exception:
+        popup = ""
+    if popup:
+        popup = urljoin(before_url, popup)
+        if registrable_domain(popup) != domain:
+            return "external"
+        await page.goto(popup, wait_until="domcontentloaded", timeout=settings.page_timeout_ms)
+        return "navigated"
+    if registrable_domain(page.url) != domain:
+        return "external"
+    if normalize_url(page.url) != normalize_url(before_url):
+        return "navigated"
+    after_text = await page.evaluate(_BODY_TEXT_JS)
+    return "changed" if after_text != before_text else "noop"
+
+
+async def _menu_phase(page: Page, *, home_url: str, domain: str, label: str, seed_source: str, settings: Settings,
+                      store: Store, idx: int, queue: list[str]) -> tuple[list[dict], int, list[str]]:
+    """홈의 충전·입금·가입 메뉴를 처리한다. 내부 URL 메뉴는 큐 맨 앞에 넣고, 버튼·JS 메뉴는 클릭해 바뀐 화면을 캡처한다.
+    (캡처 meta 목록, 클릭 횟수, 배너 외부 href) 를 돌려준다. 페이지는 홈이 열린 상태여야 한다."""
+    targets = menu_targets(await page.evaluate(MENU_JS), domain)
+    known = {normalize_url(u) for u in queue} | {normalize_url(home_url)}
+    front: list[str] = []
+    for t in targets:
+        if t.href and normalize_url(t.href) not in known:
+            front.append(t.href)
+            known.add(normalize_url(t.href))
+    queue[0:0] = front
+    metas: list[dict] = []
+    ext_hrefs: list[str] = []
+    clicks = 0
+    for t in [t for t in targets if t.href is None][:settings.max_menu_clicks]:
+        if store.ok_count(label, domain) >= settings.per_domain:
+            break
+        if clicks > 0:   # 이전 클릭이 바꾼 화면을 홈으로 되돌리고, 다시 만들어진 DOM에서 같은 글자의 메뉴를 다시 찾는다
+            try:
+                await page.goto(home_url, wait_until="domcontentloaded", timeout=settings.page_timeout_ms)
+                fresh = {x.text: x for x in menu_targets(await page.evaluate(MENU_JS), domain)}
+            except Exception:
+                break
+            t = fresh.get(t.text)
+            if t is None or t.href is not None:
+                continue
+        clicks += 1
+        try:
+            result = await _click_menu(page, t, domain=domain, settings=settings)
+        except Exception:
+            continue
+        if result not in ("navigated", "changed"):
+            continue
+        meta, _links, ext = await capture_page(page, page.url, label=label, seed_source=seed_source, settings=settings, store=store,
+                                               idx=idx + len(metas), navigate=False, full_page=(result == "navigated"),
+                                               via=f"menu:{t.text}", kind_hint=t.kind)
+        store.record(meta)
+        metas.append(meta)
+        ext_hrefs.extend(ext)
+    return metas, clicks, ext_hrefs
+
+
 async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, settings: Settings,
-                         store: Store) -> tuple[list[dict], list[tuple[str, str]]]:
-    """시드 도메인의 홈과 내부 링크를 순서대로 캡처. (metas, [(외부 href, 페이지 도메인)]) 를 돌려준다."""
+                         store: Store) -> tuple[list[dict], list[tuple[str, str]], dict[str, int]]:
+    """시드 도메인의 홈과 내부 링크를 순서대로 캡처. (metas, [(외부 href, 페이지 도메인)], 메뉴 클릭 집계) 를 돌려준다."""
     domain = registrable_domain(seed.url)
     metas: list[dict] = []
     candidates: list[tuple[str, str]] = []
+    stats = {"menu_clicks": 0, "menu_captures": 0}
     queue = [seed.url]
     idx = 0
     delay = settings.delays.get(label, 3.0)
@@ -232,20 +386,28 @@ async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, set
                 break  # DNS 실패 도메인은 내부 링크를 시도하지 않는다
             if idx == 0:
                 queue.extend(links)
+                if settings.click_menus and meta["status"] in ("ok", "duplicate"):   # --refresh면 홈은 duplicate로 끝난다
+                    mm, clicks, mext = await _menu_phase(page, home_url=url, domain=domain, label=label, seed_source=seed.source,
+                                                         settings=settings, store=store, idx=idx + 1, queue=queue)
+                    metas.extend(mm)
+                    candidates.extend((h, domain) for h in mext)
+                    stats["menu_clicks"] += clicks
+                    stats["menu_captures"] += sum(1 for m in mm if m["status"] == "ok")
+                    idx += len(mm)
             idx += 1
             elapsed = time.monotonic() - started
             if queue and delay > elapsed:
                 await asyncio.sleep(delay - elapsed)
     finally:
         await page.close()
-    return metas, candidates
+    return metas, candidates, stats
 
 
 async def run_capture(settings: Settings, seeds: list[Seed], *, label: str, emit_candidates: bool = False,
                       candidates_path: Path | None = None, known_domains: frozenset[str] = frozenset()) -> dict:
     store = Store(settings.out_root, settings.salt)
     summary: dict = {s: 0 for s in STATUSES}
-    summary.update({"skipped_domains": 0, "domains": 0, "candidates_added": 0})
+    summary.update({"skipped_domains": 0, "domains": 0, "candidates_added": 0, "menu_clicks": 0, "menu_captures": 0})
     todo: list[Seed] = []
     for seed in seeds:
         if store.ok_count(label, registrable_domain(seed.url)) >= settings.per_domain:
@@ -263,11 +425,13 @@ async def run_capture(settings: Settings, seeds: list[Seed], *, label: str, emit
                 async with sem:
                     context = await new_context(pw, browser, settings)
                     try:
-                        metas, cands = await capture_domain(context, seed, label=label, settings=settings, store=store)
+                        metas, cands, stats = await capture_domain(context, seed, label=label, settings=settings, store=store)
                     finally:
                         await context.close()
                     for m in metas:
                         summary[m["status"]] += 1
+                    for k, v in stats.items():
+                        summary[k] += v
                     all_candidates.extend(cands)
                     summary["domains"] += 1
             await asyncio.gather(*(work(s) for s in todo))

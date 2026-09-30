@@ -47,7 +47,7 @@ cp .env.example .env   # CRAWLER_SALT를 임의의 긴 문자열로 바꾼다
 .venv/bin/pytest -q                                    # 단위 + 로컬 픽스처 통합 테스트
 ```
 
-내부 링크는 충전·입금·회원가입(결제 직전 화면) → 이벤트·공지·게임 → 나머지 순으로 고르고, 각 페이지에 `page_kind`(home/deposit/register/login/other)를 기록한다. 이미 수집한 도메인에서 충전 페이지를 더 모으려면 `capture --refresh --per-domain 6`. 결과는 저장소 밖 `/Users/seongmin/Downloads/논문 관련/dataset/<label>/<도메인해시>/`에 쓰이고 `index.jsonl`이 전역 색인이다. 국내 망에서 차단된 도메인은 `blocked_kr`로 기록만 한다. 시드 작성법과 실행 순서는 `seeds/README.md`.
+내부 링크는 충전·입금·회원가입(결제 직전 화면) → 이벤트·공지·게임 → 나머지 순으로 고르고, 각 페이지에 `page_kind`(home/deposit/register/login/other)를 기록한다. 이미 수집한 도메인에서 충전 페이지를 더 모으려면 `capture --refresh --per-domain 6`. 충전·가입 화면이 링크가 아니라 버튼·JS 메뉴(모달, 팝업) 뒤에 있는 사이트는 `--click-menus`를 붙이면 홈에서 '충전·입금·가입' 글자의 메뉴를 도메인당 2개(`--max-menu-clicks`)까지 클릭해 바뀐 화면을 캡처한다(주소가 바뀌면 전체 페이지, 모달이면 뷰포트만; `via: "menu:<글자>"`로 기록). 내부 URL 메뉴는 클릭 대신 큐 앞에 넣고, 사이트 밖으로 나가는 메뉴는 따라가지 않는다. 결과는 저장소 밖 `/Users/seongmin/Downloads/논문 관련/dataset/<label>/<도메인해시>/`에 쓰이고 `index.jsonl`이 전역 색인이다. 국내 망에서 차단된 도메인은 `blocked_kr`로 기록만 한다. 시드 작성법과 실행 순서는 `seeds/README.md`.
 
 ## 문서
 

@@ -26,6 +26,8 @@ class Settings:
     viewport_height: int = 915
     dpr: int = 2
     refresh: bool = False   # 최근 7일 내 캡처한 홈도 다시 열어 내부 링크를 새로 모은다
+    click_menus: bool = False   # 홈의 충전·입금·가입 메뉴(버튼·JS 링크)를 클릭해 결제 직전 화면을 추가 수집
+    max_menu_clicks: int = 2    # 도메인당 클릭할 메뉴 수(내부 URL 메뉴는 클릭 대신 큐 앞에 넣으므로 제외)
     delays: dict[str, float] = field(default_factory=lambda: {
         "gambling": 3.0, "embedded_banner": 3.0, "hard_negative": 5.0, "normal": 5.0})
     robots_labels: frozenset[str] = frozenset({"hard_negative", "normal"})

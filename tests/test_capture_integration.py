@@ -81,6 +81,27 @@ async def test_rerun_skips_domain_that_reached_per_domain(site, tmp_path):
     assert third["duplicate"] >= 1 and third["ok"] >= 1
 
 
+async def test_click_menus_captures_modal_deposit_screen(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    settings.click_menus = True; settings.per_domain = 3
+    summary = await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-09-30")], label="gambling")
+    rows = [json.loads(l) for l in (settings.out_root / "index.jsonl").read_text(encoding="utf-8").splitlines()]
+    # 홈 → 메뉴 클릭(입금신청: 모달 캡처, 충전문의: 변화 없음 → 기록 안 함) → 링크(charge.html)
+    assert summary["ok"] == 3 and summary["menu_clicks"] == 2 and summary["menu_captures"] == 1
+    assert [r["status"] for r in rows] == ["ok", "ok", "ok"]
+    home, menu, link = rows
+    assert home["via"] is None and menu["via"] == "menu:입금신청" and menu["page_kind"] == "deposit"
+    assert menu["url"] == home["url"]                                  # 모달이라 주소는 그대로
+    assert Image.open(settings.out_root / menu["full_path"]).size == (824, 1830)   # 모달은 뷰포트만 캡처
+    assert link["url"].endswith("/charge.html") and link["via"] is None
+
+
+async def test_click_menus_off_by_default_changes_nothing(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    summary = await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-09-30")], label="gambling")
+    assert summary["ok"] == 2 and summary["menu_clicks"] == 0 and summary["menu_captures"] == 0
+
+
 async def test_emit_candidates_writes_external_banner_domains(site, tmp_path):
     settings = fast_settings(tmp_path)
     cand = tmp_path / "candidates.csv"

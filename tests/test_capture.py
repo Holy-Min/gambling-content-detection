@@ -1,4 +1,26 @@
-from crawler.capture import page_kind, pick_internal_links
+from crawler.capture import menu_targets, page_kind, pick_internal_links
+
+
+def test_menu_targets_orders_deposit_first_dedupes_text_and_keeps_internal_href():
+    items = [
+        {"key": 0, "text": "회원가입", "tag": "a", "href": "https://site.com/#"},          # '#'뿐인 href → 클릭 대상
+        {"key": 1, "text": "입금신청", "tag": "button", "href": ""},
+        {"key": 2, "text": "충전하기", "tag": "a", "href": "https://site.com/charge"},     # 진짜 내부 URL → 이동 대상
+        {"key": 3, "text": "입금신청", "tag": "span", "href": ""},                        # 같은 글자 중복
+        {"key": 4, "text": "충전 이벤트 안내 공지사항 보기 바로가기", "tag": "a", "href": ""},  # 메뉴가 아닌 긴 글
+        {"key": 5, "text": "충전", "tag": "a", "href": "https://other.com/charge"},        # 외부 링크는 제외
+        {"key": 6, "text": "이벤트", "tag": "a", "href": ""},                             # 키워드 없음
+        {"key": 7, "text": "JOIN", "tag": "a", "href": "javascript:void(0)"},            # javascript: → 클릭 대상
+    ]
+    got = menu_targets(items, "site.com")
+    assert [(t.key, t.kind, t.href) for t in got] == [
+        (1, "deposit", None), (2, "deposit", "https://site.com/charge"), (0, "register", None), (7, "register", None)]
+
+
+def test_menu_targets_prefers_anchor_over_wrapper_with_same_text():
+    items = [{"key": 0, "text": "충전", "tag": "li", "href": ""}, {"key": 1, "text": "충전", "tag": "a", "href": "https://site.com/m/12"}]
+    got = menu_targets(items, "site.com")
+    assert [(t.key, t.href) for t in got] == [(1, "https://site.com/m/12")]
 
 
 def test_pick_internal_links_prefers_keywords_and_same_domain():
