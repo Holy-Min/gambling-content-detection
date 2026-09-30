@@ -8,6 +8,7 @@ from urllib.parse import quote, unquote, urlsplit
 
 from playwright.async_api import async_playwright
 
+from .blocked import is_blocked_kr
 from .browser import attach_page_guards, new_context, open_browser
 from .config import Settings
 from .domains import registrable_domain
@@ -68,21 +69,33 @@ async def _collect_hrefs(page, url: str, settings: Settings) -> list[str]:
     return await page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
 
 
+RESET_MARKERS = ("ERR_CONNECTION_RESET", "ERR_CONNECTION_CLOSED", "ERR_SSL_PROTOCOL_ERROR")
+
+
 async def discover_community(settings: Settings, community_csv: Path, out_csv: Path, known_domains: set[str]) -> int:
+    """커뮤니티 페이지마다 새 컨텍스트를 쓴다(한 페이지의 오류가 다음 페이지로 번지지 않게)."""
     seeds = read_seeds(community_csv)
     added_total = 0
     async with async_playwright() as pw:
         browser = await open_browser(pw)
-        context = await new_context(pw, browser, settings)
-        page = await context.new_page(); attach_page_guards(page)
         try:
             for seed in seeds:
                 page_domain = registrable_domain(seed.url)
+                context = await new_context(pw, browser, settings)
                 try:
+                    page = await context.new_page(); attach_page_guards(page)
                     hrefs = await _collect_hrefs(page, seed.url, settings)
+                    body = await page.evaluate("document.body ? document.body.innerText.slice(0, 20000) : ''")
+                    if is_blocked_kr(page.url, body):
+                        print(f"[community] {page_domain}: 차단 안내 페이지(blocked_kr)")
+                        continue
                 except Exception as e:
-                    print(f"[community] {seed.url}: {type(e).__name__}")
+                    msg = str(e)
+                    why = "연결 리셋(ISP 차단 추정)" if any(m in msg for m in RESET_MARKERS) else f"{type(e).__name__}: {msg[:80]}"
+                    print(f"[community] {page_domain}: {why}")
                     continue
+                finally:
+                    await context.close()
                 urls = external_domains_urls(hrefs, page_domain)
                 added = append_candidates(out_csv, urls, source=f"community:{page_domain}", known_domains=known_domains)
                 known_domains.update(registrable_domain(u) for u in added)
@@ -90,7 +103,7 @@ async def discover_community(settings: Settings, community_csv: Path, out_csv: P
                 print(f"[community] {page_domain}: 외부 도메인 {len(urls)}개 중 {len(added)}개 추가")
                 await asyncio.sleep(settings.delays.get("gambling", 3.0))
         finally:
-            await context.close(); await browser.close()
+            await browser.close()
     return added_total
 
 

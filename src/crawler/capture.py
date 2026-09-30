@@ -22,6 +22,7 @@ from .store import Store, ahash, now_kst, ts_label
 
 LINK_KEYWORDS = ("event", "notice", "casino", "sports", "slot", "이벤트", "공지", "카지노", "스포츠", "슬롯")
 STATUSES = ("ok", "blocked_kr", "error", "duplicate", "robots_disallow")
+RESET_MARKERS = ("ERR_CONNECTION_RESET", "ERR_CONNECTION_CLOSED", "ERR_SSL_PROTOCOL_ERROR")
 
 
 def _strip_fragment(url: str) -> str:
@@ -161,8 +162,14 @@ async def capture_page(page: Page, url: str, *, label: str, seed_source: str, se
         meta["full_path"] = str(full.relative_to(store.root))
         meta["status"] = "ok"
     except Exception as e:  # 페이지 단위 격리: 어떤 예외도 다음 페이지로 넘어간다
-        meta["status"] = "error"
-        meta["error"] = f"{type(e).__name__}: {str(e)[:300]}"
+        msg = str(e)
+        if any(m in msg for m in RESET_MARKERS):
+            # 국내 ISP는 HTTPS 불법 사이트를 warning.or.kr 대신 연결 리셋으로 막기도 한다
+            meta["status"] = "blocked_kr"
+            meta["error"] = "connection reset (ISP 차단 추정): " + msg.splitlines()[0][:200]
+        else:
+            meta["status"] = "error"
+            meta["error"] = f"{type(e).__name__}: {msg[:300]}"
     return meta, links, ext_hrefs
 
 
