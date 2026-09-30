@@ -8,6 +8,7 @@ def test_registrable_domain_strips_subdomains():
 
 def test_registrable_domain_for_ip_returns_ip():
     assert registrable_domain("http://127.0.0.1:8000/x") == "127.0.0.1"
+    assert registrable_domain("https://toto-partner.example/join") == "toto-partner.example"
 
 
 def test_domain_hash_is_12_hex_and_salted():

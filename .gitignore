@@ -22,3 +22,6 @@ venv/
 # 환경
 .env
 .DS_Store
+
+# Python packaging
+*.egg-info/

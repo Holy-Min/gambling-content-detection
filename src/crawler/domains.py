@@ -27,7 +27,7 @@ def registrable_domain(url: str) -> str:
     ext = _EXTRACT(_with_scheme(url))
     if ext.suffix:
         return f"{ext.domain}.{ext.suffix}".lower()
-    return (ext.domain or host_of(url)).lower()
+    return host_of(url)  # IP, localhost, 알 수 없는 TLD: 호스트 전체를 그대로 쓴다
 
 
 def domain_hash(domain: str, salt: str) -> str:
