@@ -25,6 +25,7 @@ class Settings:
     viewport_width: int = 412   # Playwright 기본 프로필(412×839, DPR 2.625)과 달리 스펙 값으로 고정
     viewport_height: int = 915
     dpr: int = 2
+    refresh: bool = False   # 최근 7일 내 캡처한 홈도 다시 열어 내부 링크를 새로 모은다
     delays: dict[str, float] = field(default_factory=lambda: {
         "gambling": 3.0, "embedded_banner": 3.0, "hard_negative": 5.0, "normal": 5.0})
     robots_labels: frozenset[str] = frozenset({"hard_negative", "normal"})

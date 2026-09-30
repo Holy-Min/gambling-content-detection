@@ -39,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--max-domains", type=int, default=None)
     c.add_argument("--concurrency", type=int, default=None)
     c.add_argument("--emit-candidates", action="store_true", help="배너의 외부 링크 도메인을 seeds/candidates.csv에 추가")
+    c.add_argument("--refresh", action="store_true", help="이미 수집한 도메인도 홈을 다시 열어 충전·가입 등 내부 페이지를 추가 수집")
 
     s = sub.add_parser("stats", help="라벨별 수집 현황")
     s.add_argument("--out", default=None)
@@ -63,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     # capture
     from .capture import run_capture  # playwright import 지연
-    settings = load_settings(out=ns.out, per_domain=ns.per_domain, max_domains=ns.max_domains, concurrency=ns.concurrency)
+    settings = load_settings(out=ns.out, per_domain=ns.per_domain, max_domains=ns.max_domains, concurrency=ns.concurrency, refresh=ns.refresh or None)
     blocklist = load_blocklist(SEEDS_DIR / "blocklist.txt")
     seeds = [s for s in read_seeds(Path(ns.seeds)) if registrable_domain(s.url) not in blocklist]
     if not seeds:

@@ -20,7 +20,11 @@ from .domains import normalize_url, registrable_domain
 from .seeds import Seed, append_candidates
 from .store import Store, ahash, now_kst, ts_label
 
+# 결제 직전 화면(충전·입금·가입)을 먼저, 그다음 콘텐츠 페이지 순으로 내부 링크를 고른다
+PAY_KEYWORDS = ("충전", "입금", "deposit", "recharge", "charge", "cash", "payment", "money")
+JOIN_KEYWORDS = ("회원가입", "가입", "join", "register", "signup", "sign-up")
 LINK_KEYWORDS = ("event", "notice", "casino", "sports", "slot", "이벤트", "공지", "카지노", "스포츠", "슬롯")
+PAGE_KINDS = ("home", "deposit", "register", "login", "other")
 STATUSES = ("ok", "blocked_kr", "challenge", "error", "duplicate", "robots_disallow")
 RESET_MARKERS = ("ERR_CONNECTION_RESET", "ERR_CONNECTION_CLOSED", "ERR_SSL_PROTOCOL_ERROR")
 
@@ -43,9 +47,25 @@ def pick_internal_links(hrefs: list[str], page_domain: str, current_url: str, n:
             continue
         seen.add(key)
         internal.append(_strip_fragment(h))
-    prioritized = [h for h in internal if any(k in h.lower() for k in LINK_KEYWORDS)]
-    rest = [h for h in internal if h not in prioritized]
-    return (prioritized + rest)[:n]
+    pay = [h for h in internal if any(k in h.lower() for k in PAY_KEYWORDS)]
+    join = [h for h in internal if h not in pay and any(k in h.lower() for k in JOIN_KEYWORDS)]
+    content = [h for h in internal if h not in pay and h not in join and any(k in h.lower() for k in LINK_KEYWORDS)]
+    rest = [h for h in internal if h not in pay and h not in join and h not in content]
+    return (pay + join + content + rest)[:n]
+
+
+def page_kind(url: str, title: str, body_text: str, idx: int) -> str:
+    """라벨링에 쓸 페이지 종류. 결제 직전 화면(deposit)·가입(register)·로그인 벽(login)을 구분한다."""
+    u = (url or "").lower(); t = (title or "").lower(); b = (body_text or "")[:3000].lower()
+    if any(k in u or k in t for k in PAY_KEYWORDS) or ("충전" in b and ("입금" in b or "계좌" in b or "상품권" in b)):
+        return "deposit"
+    if any(k in u or k in t for k in JOIN_KEYWORDS):
+        return "register"
+    if idx == 0:
+        return "home"
+    if "로그인" in b and "비밀번호" in b and len(b) < 600:
+        return "login"
+    return "other"
 
 
 @lru_cache(maxsize=1024)
@@ -74,7 +94,7 @@ def _empty_meta(*, label: str, seed_source: str, url: str, domain: str, store: S
             "url_norm": normalize_url(url), "final_url": None, "domain": domain, "domain_hash": dhash,
             "captured_at": at.isoformat(), "status": "error",
             "viewport": {"width": settings.viewport_width, "height": settings.viewport_height, "dpr": settings.dpr},
-            "title": None, "full_path": None, "page_height": None, "image_size": None, "phash": None, "banners": [], "error": None}
+            "title": None, "page_kind": None, "full_path": None, "page_height": None, "image_size": None, "phash": None, "banners": [], "error": None}
 
 
 async def _scroll_through(page: Page, settings: Settings) -> int:
@@ -142,6 +162,7 @@ async def capture_page(page: Page, url: str, *, label: str, seed_source: str, se
             pass
         meta["page_height"] = await _scroll_through(page, settings)
         meta["title"] = await page.title()
+        meta["page_kind"] = page_kind(page.url, meta["title"], body_text, idx)
         ddir.mkdir(parents=True, exist_ok=True)
         full = ddir / f"{stem}_full.png"
         await page.screenshot(path=str(full), full_page=True)
@@ -195,8 +216,8 @@ async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, set
     try:
         while queue and store.ok_count(label, domain) < settings.per_domain and idx < settings.per_domain + 2:
             url = queue.pop(0)
-            if store.seen_recently(url):
-                continue
+            if store.seen_recently(url) and not (settings.refresh and idx == 0):
+                continue  # --refresh: 홈은 다시 열어 내부 링크(충전·가입 페이지)를 새로 모은다
             if label in settings.robots_labels and not robots_allows(url):
                 meta = _empty_meta(label=label, seed_source=seed.source, url=url, domain=domain, store=store, idx=idx, settings=settings)
                 meta["status"] = "robots_disallow"

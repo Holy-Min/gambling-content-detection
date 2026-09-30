@@ -55,7 +55,8 @@ async def test_capture_saves_full_page_banners_and_index(site, tmp_path):
     ext = [b for b in home["banners"] if b["external"]]
     assert ext and ext[0]["href_domain"] == "toto-partner.com"
     assert all((settings.out_root / b["path"]).exists() for b in home["banners"])
-    assert rows[1]["url"].endswith(("/page2.html", "/page3.html"))
+    assert rows[1]["url"].endswith("/charge.html") and rows[1]["page_kind"] == "deposit"   # 충전 페이지 우선
+    assert home["page_kind"] == "home"
     assert (settings.out_root / "gambling" / home["domain_hash"] / "meta.jsonl").exists()
 
 
@@ -74,6 +75,10 @@ async def test_rerun_skips_domain_that_reached_per_domain(site, tmp_path):
     await run_capture(settings, seed, label="gambling")
     second = await run_capture(settings, seed, label="gambling")
     assert second["skipped_domains"] == 1 and second["ok"] == 0
+    # --refresh + per_domain 상향: 홈을 다시 열어(중복 처리) 새 내부 페이지를 추가로 모은다
+    settings.refresh = True; settings.per_domain = 3
+    third = await run_capture(settings, seed, label="gambling")
+    assert third["duplicate"] >= 1 and third["ok"] >= 1
 
 
 async def test_emit_candidates_writes_external_banner_domains(site, tmp_path):
