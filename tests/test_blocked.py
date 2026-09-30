@@ -15,6 +15,11 @@ def test_blocked_by_kcsc_and_block_word():
     assert is_blocked_kr("https://x.com/", "방송통신심의위원회의 심의 결과에 따라 차단된 페이지입니다")
 
 
+def test_blocked_by_renamed_agency_and_spaced_notice():
+    assert is_blocked_kr("https://x.com/", "Warning 불법·유해 정보(사이트)에 대한 차단 안내")
+    assert is_blocked_kr("https://x.com/", "방송미디어통신심의위원회의 심의를 거쳐 차단된 것이오니")
+
+
 def test_not_blocked_normal_page():
     assert not is_blocked_kr("https://news.example.com/", "방송통신심의위원회가 회의를 열었다")  # '차단' 없음
     assert not is_blocked_kr("https://toto.example/", "첫 충전 100% 보너스")

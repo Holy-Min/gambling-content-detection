@@ -4,17 +4,17 @@ from __future__ import annotations
 from .domains import host_of
 
 BLOCKED_HOSTS = frozenset({"warning.or.kr", "www.warning.or.kr"})
-_NOTICE = "불법·유해정보(사이트)에 대한 차단 안내"
-_KCSC = "방송통신심의위원회"
+_NOTICES = ("불법·유해정보(사이트)에 대한 차단 안내", "불법·유해 정보(사이트)에 대한 차단 안내", "불법·유해정보사이트에 대한 차단 안내")
+_KCSC = ("방송통신심의위원회", "방송미디어통신심의위원회")  # 2026년 기관명 변경 표기 포함
 
 
 def is_blocked_kr(final_url: str, body_text: str) -> bool:
     if host_of(final_url) in BLOCKED_HOSTS:
         return True
     text = body_text or ""
-    if _NOTICE in text:
+    if any(n in text for n in _NOTICES):
         return True
-    return _KCSC in text and "차단" in text
+    return any(k in text for k in _KCSC) and "차단" in text
 
 
 # Cloudflare 등 봇 확인 페이지와 지역 차단 안내 페이지. 화면에 도박 콘텐츠가 없으므로 ok로 세지 않는다.
