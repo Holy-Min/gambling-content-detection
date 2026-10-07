@@ -45,33 +45,6 @@ notebooks/         실험 노트북 (예정)
 references/        선행 연구 정리
 ```
 
-## 데이터 수집기 (src/crawler)
-
-모바일 뷰포트(Pixel 7 프로필, 412×915, DPR 2)로 페이지를 렌더링해 전체 화면 스크린샷 + 배너 크롭 + 메타데이터를 저장한다. 설계: `docs/superpowers/specs/2026-09-23-gambling-crawler-design.md`, 구현 계획: `docs/superpowers/plans/2026-09-30-gambling-crawler.md`.
-
-```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt -e . && .venv/bin/playwright install chromium
-cp .env.example .env   # CRAWLER_SALT를 임의의 긴 문자열로 바꾼다
-.venv/bin/python -m crawler discover search            # 후보 → seeds/candidates.csv (사람이 검토해 gambling.csv로)
-.venv/bin/python -m crawler discover community         # 검증 커뮤니티 페이지의 외부 링크 → candidates.csv
-.venv/bin/python -m crawler capture --label gambling --seeds seeds/gambling.csv --click-menus
-.venv/bin/python -m crawler stats
-.venv/bin/pytest -q                                    # 단위 + 로컬 픽스처 통합 테스트
-```
-
-내부 링크는 충전·입금·회원가입(결제 직전 화면) → 이벤트·공지·게임 → 나머지 순으로 고르고, 각 페이지에 `page_kind`(home/deposit/register/login/other)를 기록한다. 이미 수집한 도메인에서 충전 페이지를 더 모으려면 `capture --refresh --per-domain 6`. 충전·가입 화면이 링크가 아니라 버튼·JS 메뉴(모달, 팝업) 뒤에 있는 사이트는 `--click-menus`를 붙이면 홈에서 '충전·입금·가입' 글자의 메뉴를 도메인당 2개(`--max-menu-clicks`)까지 클릭해 바뀐 화면을 캡처한다(주소가 바뀌면 전체 페이지, 모달이면 뷰포트만; `via: "menu:<글자>"`로 기록). 내부 URL 메뉴는 클릭 대신 큐 앞에 넣고, 사이트 밖으로 나가는 메뉴는 따라가지 않는다. 결과는 저장소 밖 `dataset/<label>/<도메인해시>/`에 쓰이고 `index.jsonl`이 전역 색인이다. 국내 망에서 차단된 도메인은 `blocked_kr`로 기록만 하고, Cloudflare 확인·지역 차단 페이지는 `challenge`로 기록하며 화면은 남기지 않는다. 시드 작성법과 실행 순서는 `seeds/README.md`.
-
-**수집 현황 (2026-10-07)**
-
-| 라벨 | 도메인 | 화면(ok) | 배너 크롭 | 비고 |
-|---|---|---|---|---|
-| gambling | 55 | 76 | 334 | blocked_kr 47 · challenge 29 — 국내 망에서 막히는 사이트가 성공한 수와 맞먹는다 |
-| hard_negative | 21 | 70 | 165 | 합법 사행·모바일 게임·결제·놀이시설 안전 기관 등 |
-| embedded_banner | 21 | 48 | 12 | 무료 중계·웹툰 사이트의 삽입 배너 |
-| normal | 8 | 27 | 81 | 포털·커뮤니티·쇼핑 |
-
-알려진 한계: 화면에 보이지 않는(햄버거 메뉴 속) 충전 버튼은 찾지 못하고, 클릭 뒤 "로그인 후 이용" 안내창만 뜨는 경우는 변화 없음으로 처리해 사유를 기록하지 않는다. 충전·입금 화면은 대부분 로그인 뒤에 있어 계정 생성 없이 직접 캡처하기 어렵다 — 커뮤니티 글에 첨부된 화면, 로그인 없이 열리는 안내 페이지로 보완하고, 평가셋은 실제 화면만 쓴다.
-
 ## 문서
 
 | 문서 | 내용 | 바로 열람 | 편집용 |
