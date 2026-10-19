@@ -373,12 +373,12 @@ async def _menu_phase(page: Page, *, home_url: str, domain: str, label: str, see
 
 
 async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, settings: Settings,
-                         store: Store) -> tuple[list[dict], list[tuple[str, str]], dict[str, int]]:
+                         store: Store, deadline: float | None = None) -> tuple[list[dict], list[tuple[str, str]], dict[str, int]]:
     """시드 도메인의 홈과 내부 링크를 순서대로 캡처. (metas, [(외부 href, 페이지 도메인)], 메뉴 클릭 집계) 를 돌려준다."""
     domain = registrable_domain(seed.url)
     metas: list[dict] = []
     candidates: list[tuple[str, str]] = []
-    stats = {"menu_clicks": 0, "menu_captures": 0, "skipped_blocked": 0}
+    stats = {"menu_clicks": 0, "menu_captures": 0, "skipped_blocked": 0, "deadline_hit": 0}
     queue = [seed.url]
     idx = 0
     delay = settings.delays.get(label, 3.0)
@@ -389,6 +389,9 @@ async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, set
     attach_page_guards(page)
     try:
         while queue and store.ok_count(label, domain, days=settings.recapture_days) < settings.per_domain and idx < settings.per_domain + 2:
+            if deadline is not None and time.monotonic() >= deadline:
+                stats["deadline_hit"] = 1
+                break
             url = queue.pop(0)
             if store.seen_recently(url, days=settings.recapture_days) and not (settings.refresh and idx == 0):
                 continue  # --refresh: 홈은 다시 열어 내부 링크(충전·가입 페이지)를 새로 모은다
@@ -406,7 +409,7 @@ async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, set
                 break  # DNS 실패 도메인은 내부 링크를 시도하지 않는다
             if idx == 0:
                 queue.extend(links)
-                if settings.click_menus and meta["status"] in ("ok", "duplicate"):   # --refresh면 홈은 duplicate로 끝난다
+                if settings.click_menus and meta["status"] in ("ok", "duplicate") and not (deadline is not None and time.monotonic() >= deadline):   # --refresh면 홈은 duplicate로 끝난다
                     mm, clicks, mext = await _menu_phase(page, home_url=url, domain=domain, label=label, seed_source=seed.source,
                                                          settings=settings, store=store, idx=idx + 1, queue=queue)
                     metas.extend(mm)
@@ -425,10 +428,11 @@ async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, set
 
 async def run_capture(settings: Settings, seeds: list[Seed], *, label: str, emit_candidates: bool = False,
                       candidates_path: Path | None = None, known_domains: frozenset[str] = frozenset(),
-                      store: Store | None = None) -> dict:
+                      store: Store | None = None, deadline: float | None = None) -> dict:
     store = store or Store(settings.out_root, settings.salt)
     summary: dict = {s: 0 for s in STATUSES}
-    summary.update({"skipped_domains": 0, "skipped_blocked": 0, "domains": 0, "candidates_added": 0, "menu_clicks": 0, "menu_captures": 0})
+    summary.update({"skipped_domains": 0, "skipped_blocked": 0, "domains": 0, "candidates_added": 0, "menu_clicks": 0, "menu_captures": 0,
+                    "skipped_deadline": 0, "deadline_hit": 0})
     todo: list[Seed] = []
     for seed in seeds:
         if store.ok_count(label, registrable_domain(seed.url), days=settings.recapture_days) >= settings.per_domain:
@@ -444,9 +448,12 @@ async def run_capture(settings: Settings, seeds: list[Seed], *, label: str, emit
         try:
             async def work(seed: Seed) -> None:
                 async with sem:
+                    if deadline is not None and time.monotonic() >= deadline:
+                        summary["skipped_deadline"] += 1
+                        return
                     context = await new_context(pw, browser, settings)
                     try:
-                        metas, cands, stats = await capture_domain(context, seed, label=label, settings=settings, store=store)
+                        metas, cands, stats = await capture_domain(context, seed, label=label, settings=settings, store=store, deadline=deadline)
                     finally:
                         await context.close()
                     for m in metas:

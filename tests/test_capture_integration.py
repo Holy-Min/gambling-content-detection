@@ -1,45 +1,12 @@
 import json
-import shutil
-import socket
-import threading
-from functools import partial
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+import time
 
-import pytest
 from PIL import Image
 
 from crawler.capture import run_capture
-from crawler.config import Settings
 from crawler.seeds import Seed
 from crawler.store import Store
-
-FIXTURES = Path(__file__).parent / "fixtures" / "site"
-
-
-class QuietHandler(SimpleHTTPRequestHandler):
-    def log_message(self, *args, **kwargs):
-        pass
-
-
-@pytest.fixture
-def site(tmp_path):
-    root = tmp_path / "site"
-    shutil.copytree(FIXTURES, root)
-    for name, size, color in [("banner1.png", (720, 180), (220, 30, 30)), ("banner2.png", (720, 240), (30, 30, 220)),
-                              ("banner3.png", (600, 200), (30, 160, 30)), ("icon.png", (48, 48), (0, 0, 0))]:
-        Image.new("RGB", size, color).save(root / name)
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]
-    server = ThreadingHTTPServer(("127.0.0.1", port), partial(QuietHandler, directory=str(root)))
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{port}"
-    server.shutdown()
-
-
-def fast_settings(tmp_path) -> Settings:
-    return Settings(out_root=tmp_path / "dataset", salt="test-salt", per_domain=2, concurrency=1,
-                    delays={"gambling": 0.0, "embedded_banner": 0.0, "hard_negative": 0.0, "normal": 0.0, "candidate": 0.0})
+from tests.conftest import fast_settings
 
 
 async def test_capture_saves_full_page_banners_and_index(site, tmp_path):
@@ -155,3 +122,16 @@ async def test_run_capture_writes_to_external_store(site, tmp_path):
     assert summary["ok"] == 2 and not (settings.out_root / "index.jsonl").exists()
     rows = index_rows(tmp_path / "_review")
     assert rows[0]["label"] == "candidate" and rows[0]["full_path"].startswith("candidate/")
+
+
+async def test_run_capture_deadline_in_the_past_skips_every_domain(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    summary = await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-10-20")], label="gambling", deadline=time.monotonic())
+    assert summary["skipped_deadline"] == 1 and summary["deadline_hit"] == 0 and summary["ok"] == 0 and summary["domains"] == 0
+    assert not (settings.out_root / "index.jsonl").exists()
+
+
+async def test_run_capture_far_deadline_changes_nothing(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    summary = await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-10-20")], label="gambling", deadline=time.monotonic() + 600)
+    assert summary["ok"] == 2 and summary["skipped_deadline"] == 0 and summary["deadline_hit"] == 0
