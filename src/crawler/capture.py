@@ -18,7 +18,7 @@ from .blocked import is_blocked_kr, is_challenge_page
 from .browser import USER_AGENT, attach_page_guards, new_context, open_browser
 from .config import Settings
 from .domains import normalize_url, registrable_domain
-from .seeds import Seed, append_candidates
+from .seeds import Seed, append_candidates, is_platform
 from .store import Store, ahash, now_kst, ts_label
 
 # 결제 직전 화면(충전·입금·가입)을 먼저, 그다음 콘텐츠 페이지 순으로 내부 링크를 고른다
@@ -53,6 +53,21 @@ def pick_internal_links(hrefs: list[str], page_domain: str, current_url: str, n:
     content = [h for h in internal if h not in pay and h not in join and any(k in h.lower() for k in LINK_KEYWORDS)]
     rest = [h for h in internal if h not in pay and h not in join and h not in content]
     return (pay + join + content + rest)[:n]
+
+
+def external_domains(hrefs: list[str], page_domain: str, limit: int = 20) -> list[str]:
+    """페이지의 외부 링크 등록 도메인(플랫폼 제외, 순서 유지, 중복 제거). 커뮤니티 판정과 검토 화면에 쓴다."""
+    out: list[str] = []
+    for h in hrefs:
+        if not h.startswith(("http://", "https://")):
+            continue
+        d = registrable_domain(h)
+        if not d or d == page_domain or is_platform(d) or d in out:
+            continue
+        out.append(d)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def page_kind(url: str, title: str, body_text: str, idx: int) -> str:
@@ -163,7 +178,7 @@ def _empty_meta(*, label: str, seed_source: str, url: str, domain: str, store: S
             "url_norm": normalize_url(url), "final_url": None, "domain": domain, "domain_hash": dhash,
             "captured_at": at.isoformat(), "status": "error",
             "viewport": {"width": settings.viewport_width, "height": settings.viewport_height, "dpr": settings.dpr},
-            "title": None, "page_kind": None, "via": None, "full_path": None, "page_height": None, "image_size": None, "phash": None, "banners": [], "error": None}
+            "title": None, "page_kind": None, "via": None, "full_path": None, "page_height": None, "image_size": None, "phash": None, "banners": [], "text_excerpt": None, "ext_domains": [], "error": None}
 
 
 async def _scroll_through(page: Page, settings: Settings) -> int:
@@ -234,6 +249,7 @@ async def capture_page(page: Page, url: str, *, label: str, seed_source: str, se
             pass
         meta["page_height"] = await _scroll_through(page, settings)
         meta["title"] = await page.title()
+        meta["text_excerpt"] = " ".join(body_text.split())[:300]
         meta["page_kind"] = page_kind(page.url, meta["title"], body_text, idx)
         if meta["page_kind"] == "other" and kind_hint:
             meta["page_kind"] = kind_hint   # 클릭한 메뉴 글자(충전·가입)로 보정
@@ -252,6 +268,7 @@ async def capture_page(page: Page, url: str, *, label: str, seed_source: str, se
         if idx == 0:
             hrefs = await page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
             links = pick_internal_links(hrefs, domain, page.url, settings.per_domain - 1)
+            meta["ext_domains"] = external_domains(hrefs, domain)
         meta["phash"] = ahash(full)
         dup = store.find_duplicate(label, domain, meta["phash"])
         if dup:
@@ -328,7 +345,7 @@ async def _menu_phase(page: Page, *, home_url: str, domain: str, label: str, see
     ext_hrefs: list[str] = []
     clicks = 0
     for t in [t for t in targets if t.href is None][:settings.max_menu_clicks]:
-        if store.ok_count(label, domain) >= settings.per_domain:
+        if store.ok_count(label, domain, days=settings.recapture_days) >= settings.per_domain:
             break
         if clicks > 0:   # 이전 클릭이 바꾼 화면을 홈으로 되돌리고, 다시 만들어진 DOM에서 같은 글자의 메뉴를 다시 찾는다
             try:
@@ -361,16 +378,19 @@ async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, set
     domain = registrable_domain(seed.url)
     metas: list[dict] = []
     candidates: list[tuple[str, str]] = []
-    stats = {"menu_clicks": 0, "menu_captures": 0}
+    stats = {"menu_clicks": 0, "menu_captures": 0, "skipped_blocked": 0}
     queue = [seed.url]
     idx = 0
     delay = settings.delays.get(label, 3.0)
+    if store.blocked_recently(label, domain, settings.skip_blocked_days):
+        stats["skipped_blocked"] = 1
+        return metas, candidates, stats
     page = await context.new_page()
     attach_page_guards(page)
     try:
-        while queue and store.ok_count(label, domain) < settings.per_domain and idx < settings.per_domain + 2:
+        while queue and store.ok_count(label, domain, days=settings.recapture_days) < settings.per_domain and idx < settings.per_domain + 2:
             url = queue.pop(0)
-            if store.seen_recently(url) and not (settings.refresh and idx == 0):
+            if store.seen_recently(url, days=settings.recapture_days) and not (settings.refresh and idx == 0):
                 continue  # --refresh: 홈은 다시 열어 내부 링크(충전·가입 페이지)를 새로 모은다
             if label in settings.robots_labels and not robots_allows(url):
                 meta = _empty_meta(label=label, seed_source=seed.source, url=url, domain=domain, store=store, idx=idx, settings=settings)
@@ -404,13 +424,14 @@ async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, set
 
 
 async def run_capture(settings: Settings, seeds: list[Seed], *, label: str, emit_candidates: bool = False,
-                      candidates_path: Path | None = None, known_domains: frozenset[str] = frozenset()) -> dict:
-    store = Store(settings.out_root, settings.salt)
+                      candidates_path: Path | None = None, known_domains: frozenset[str] = frozenset(),
+                      store: Store | None = None) -> dict:
+    store = store or Store(settings.out_root, settings.salt)
     summary: dict = {s: 0 for s in STATUSES}
-    summary.update({"skipped_domains": 0, "domains": 0, "candidates_added": 0, "menu_clicks": 0, "menu_captures": 0})
+    summary.update({"skipped_domains": 0, "skipped_blocked": 0, "domains": 0, "candidates_added": 0, "menu_clicks": 0, "menu_captures": 0})
     todo: list[Seed] = []
     for seed in seeds:
-        if store.ok_count(label, registrable_domain(seed.url)) >= settings.per_domain:
+        if store.ok_count(label, registrable_domain(seed.url), days=settings.recapture_days) >= settings.per_domain:
             summary["skipped_domains"] += 1
             continue
         todo.append(seed)

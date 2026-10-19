@@ -12,6 +12,7 @@ from PIL import Image
 from crawler.capture import run_capture
 from crawler.config import Settings
 from crawler.seeds import Seed
+from crawler.store import Store
 
 FIXTURES = Path(__file__).parent / "fixtures" / "site"
 
@@ -38,7 +39,7 @@ def site(tmp_path):
 
 def fast_settings(tmp_path) -> Settings:
     return Settings(out_root=tmp_path / "dataset", salt="test-salt", per_domain=2, concurrency=1,
-                    delays={"gambling": 0.0, "embedded_banner": 0.0, "hard_negative": 0.0, "normal": 0.0})
+                    delays={"gambling": 0.0, "embedded_banner": 0.0, "hard_negative": 0.0, "normal": 0.0, "candidate": 0.0})
 
 
 async def test_capture_saves_full_page_banners_and_index(site, tmp_path):
@@ -109,3 +110,48 @@ async def test_emit_candidates_writes_external_banner_domains(site, tmp_path):
                       emit_candidates=True, candidates_path=cand)
     text = cand.read_text(encoding="utf-8")
     assert "toto-partner.com" in text and "banner:127.0.0.1" in text
+
+
+def index_rows(root):
+    return [json.loads(l) for l in (root / "index.jsonl").read_text(encoding="utf-8").splitlines()]
+
+
+async def test_meta_has_text_excerpt_and_external_domains(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-10-20")], label="gambling")
+    home, charge = index_rows(settings.out_root)
+    assert "첫 충전 100% 보너스" in home["text_excerpt"] and len(home["text_excerpt"]) <= 300
+    assert home["ext_domains"] == ["toto-partner.com", "elsewhere.net"]
+    assert charge["ext_domains"] == [] and charge["text_excerpt"].startswith("충전 신청")
+
+
+async def test_recapture_window_zero_reshoots_and_dedups(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    seed = [Seed(url=site + "/", source="test", added_at="2026-10-20")]
+    first = await run_capture(settings, seed, label="gambling")
+    settings.recapture_days = 0
+    second = await run_capture(settings, seed, label="gambling")
+    assert first["ok"] == 2
+    assert second["skipped_domains"] == 0 and second["ok"] == 0 and second["duplicate"] == 2
+    assert len([p for p in (settings.out_root / "gambling").rglob("*_full.png")]) == 2   # 중복 파일은 남기지 않는다
+
+
+async def test_recently_blocked_domain_is_skipped_until_window_passes(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    seed = [Seed(url=site + "/warning.html", source="test", added_at="2026-10-20")]
+    first = await run_capture(settings, seed, label="gambling")
+    settings.recapture_days = 0
+    second = await run_capture(settings, seed, label="gambling")
+    assert first["blocked_kr"] == 1 and second["skipped_blocked"] == 1 and second["blocked_kr"] == 0 and second["domains"] == 1
+    settings.skip_blocked_days = 0
+    third = await run_capture(settings, seed, label="gambling")
+    assert third["blocked_kr"] == 1 and third["skipped_blocked"] == 0
+
+
+async def test_run_capture_writes_to_external_store(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    review = Store(tmp_path / "_review", settings.salt)
+    summary = await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-10-20")], label="candidate", store=review)
+    assert summary["ok"] == 2 and not (settings.out_root / "index.jsonl").exists()
+    rows = index_rows(tmp_path / "_review")
+    assert rows[0]["label"] == "candidate" and rows[0]["full_path"].startswith("candidate/")

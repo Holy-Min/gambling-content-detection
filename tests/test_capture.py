@@ -48,3 +48,13 @@ def test_page_kind():
 def test_pick_internal_links_falls_back_to_first_unique():
     hrefs = ["https://site.com/a", "https://site.com/a?x=1#f", "https://site.com/b"]
     assert pick_internal_links(hrefs, "site.com", current_url="https://site.com/", n=5) == ["https://site.com/a", "https://site.com/a?x=1", "https://site.com/b"]
+
+
+from crawler.capture import external_domains
+
+
+def test_external_domains_excludes_same_domain_platform_and_dups_with_limit():
+    hrefs = ["https://site.com/a", "https://www.toto-partner.com/j", "https://naver.com/x", "https://toto-partner.com/k",
+             "javascript:void(0)", "https://elsewhere.net/", "mailto:a@b.c"] + [f"https://d{i}.com/" for i in range(30)]
+    got = external_domains(hrefs, "site.com")
+    assert got[:2] == ["toto-partner.com", "elsewhere.net"] and len(got) == 20
