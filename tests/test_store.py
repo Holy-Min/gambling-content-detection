@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 from PIL import Image
@@ -60,3 +61,69 @@ def test_ahash_hamming_and_duplicate(tmp_path):
     assert s.find_duplicate("gambling", "a.com", h2) == meta()["id"]
     assert s.find_duplicate("gambling", "a.com", h3) is None
     assert s.find_duplicate("normal", "a.com", h2) is None
+
+
+def meta_idx(label, domain, status, idx, at, store, phash="0" * 64):
+    h = store.hash_of(domain)
+    stem = f"{ts_label(at)}_{idx}"
+    ok = status == "ok"
+    return {"id": f"{h}_{stem}", "label": label, "domain": domain, "domain_hash": h, "status": status,
+            "url": f"https://{domain}/{idx}", "url_norm": f"https://{domain}/{idx}", "phash": phash, "captured_at": at.isoformat(),
+            "full_path": f"{label}/{h}/{stem}_full.png" if ok else None,
+            "banners": [{"path": f"{label}/{h}/{stem}_b0.png", "external": True}] if ok else []}
+
+
+def test_ok_count_window_and_rows_for(tmp_path):
+    s = Store(tmp_path, "salt")
+    old = datetime(2026, 10, 1, tzinfo=KST); recent = datetime(2026, 10, 19, 23, 0, tzinfo=KST)
+    s.record(meta_idx("gambling", "a.com", "ok", 0, old, s)); s.record(meta_idx("gambling", "a.com", "ok", 1, recent, s))
+    now = datetime(2026, 10, 20, 4, 30, tzinfo=KST)
+    assert s.ok_count("gambling", "a.com") == 2
+    assert s.ok_count("gambling", "a.com", days=7, now=now) == 1
+    assert s.ok_count("gambling", "a.com", days=0, now=now) == 0
+    assert len(s.rows_for("gambling", "a.com")) == 2 and s.rows_for("normal", "a.com") == []
+    assert Store.page_index(s.rows_for("gambling", "a.com")[1]) == 1 and Store.page_index({"id": "x_20260930T200000"}) == -1
+
+
+def test_blocked_recently_uses_latest_home_row(tmp_path):
+    s = Store(tmp_path, "salt")
+    now = datetime(2026, 10, 20, 4, 30, tzinfo=KST)
+    s.record(meta_idx("gambling", "b.com", "blocked_kr", 0, datetime(2026, 10, 19, tzinfo=KST), s))
+    assert s.blocked_recently("gambling", "b.com", days=7, now=now)
+    assert not s.blocked_recently("gambling", "b.com", days=0, now=now)
+    assert not s.blocked_recently("normal", "b.com", days=7, now=now)
+    s.record(meta_idx("gambling", "b.com", "ok", 0, datetime(2026, 10, 19, 12, tzinfo=KST), s))   # 더 최근 홈이 ok
+    assert not s.blocked_recently("gambling", "b.com", days=7, now=now)
+    s.record(meta_idx("gambling", "c.com", "blocked_kr", 1, datetime(2026, 10, 19, tzinfo=KST), s))   # 홈이 아닌 행은 무시
+    assert not s.blocked_recently("gambling", "c.com", days=7, now=now)
+
+
+def test_remove_domain_rewrites_index_and_deletes_dir(tmp_path):
+    s = Store(tmp_path, "salt")
+    at = datetime(2026, 10, 19, tzinfo=KST)
+    s.record(meta_idx("gambling", "a.com", "ok", 0, at, s)); s.record(meta_idx("gambling", "z.com", "ok", 0, at, s))
+    (s.domain_dir("gambling", "a.com") / "x_full.png").write_bytes(b"png")
+    assert s.remove_domain("gambling", "a.com") == 1
+    assert not s.domain_dir("gambling", "a.com").exists()
+    assert [m["domain"] for m in Store(tmp_path, "salt").load_index()] == ["z.com"]
+    assert s.remove_domain("gambling", "a.com") == 0
+
+
+def test_adopt_domain_moves_files_and_relabels_rows(tmp_path):
+    review = Store(tmp_path / "_review", "salt"); main = Store(tmp_path, "salt")
+    at = datetime(2026, 10, 19, tzinfo=KST)
+    for idx in (0, 1):
+        review.record(meta_idx("candidate", "a.com", "ok", idx, at, review))
+    src = review.domain_dir("candidate", "a.com")
+    for name in (f"{ts_label(at)}_0_full.png", f"{ts_label(at)}_0_b0.png"):
+        (src / name).write_bytes(b"png")
+    new_rows = main.adopt_domain(src, review.rows_for("candidate", "a.com"), "gambling")
+    dest = main.domain_dir("gambling", "a.com")
+    assert not src.exists() and (dest / f"{ts_label(at)}_0_full.png").exists()
+    assert [r["label"] for r in new_rows] == ["gambling", "gambling"]
+    assert new_rows[0]["full_path"] == f"gambling/{main.hash_of('a.com')}/{ts_label(at)}_0_full.png"
+    assert new_rows[0]["banners"][0]["path"].startswith(f"gambling/{main.hash_of('a.com')}/")
+    meta_lines = [json.loads(l) for l in (dest / "meta.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert [m["label"] for m in meta_lines] == ["gambling", "gambling"]
+    assert main.ok_count("gambling", "a.com") == 2 and Store(tmp_path, "salt").ok_count("gambling", "a.com") == 2
+    assert review.remove_domain("candidate", "a.com", delete_files=False) == 2 and review.rows_for("candidate", "a.com") == []
