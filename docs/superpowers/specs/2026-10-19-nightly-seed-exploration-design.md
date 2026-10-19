@@ -128,7 +128,7 @@
 
 ### 파일 규격
 
-`out/<날짜>/review.csv`, 컬럼 `domain,url,title,status,signals,suggested,verdict,note,review_dir`. `signals` 는 `|` 로 이은 문자열. `verdict` 와 `note` 만 사람이 채운다. `review_dir` 은 `_review/candidate/<해시>` 상대 경로.
+`out/<날짜>/review.csv`, 컬럼 `domain,url,title,status,signals,suggested,verdict,note,review_dir`. `signals` 는 `|` 로 이은 문자열. `verdict` 와 `note` 만 사람이 채운다. `review_dir` 은 리뷰 폴더의 절대 경로(`<리뷰 루트>/candidate/<해시>`). 리뷰 루트가 `CRAWLER_REVIEW` 로 바뀌어도 그대로 쓰기 위해서다.
 
 `verdict` 허용값: `gambling · embedded_banner · hard_negative · normal · community · exclude · blocked`, 빈 값은 "아직 판단 안 함".
 

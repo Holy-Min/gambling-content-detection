@@ -22,3 +22,10 @@
 5. `python -m crawler capture --label gambling --seeds seeds/gambling.csv`
 6. `python -m crawler capture --label hard_negative --seeds seeds/hard_negative.csv` (robots.txt·5초 간격 자동 적용), normal도 같은 방식
 7. `python -m crawler stats`
+
+## 야간 루프가 바꾸는 파일
+
+- `candidates.csv`: discover 가 `unverified` 로 추가하고, 선캡처하면 note 를 `review: <날짜>` 로, `promote` 가 판정 결과(`→ gambling.csv (review <날짜>)`, `excluded: …`, `blocked_kr <날짜>`)로 바꾼다.
+- `community_lists.csv`: 선캡처 페이지가 커뮤니티로 보이면 `source=auto:<날짜>`, `note=자동 등록(미검토)` 로 추가된다. `exclude` 판정이면 지워진다.
+- `keywords_auto.txt`, `explore_state.json`: 자동 키워드와 수확 기록. 손으로 고칠 키워드는 `keywords.txt` 에만.
+- 라벨 시드 4개: `promote` 가 `source=review:<날짜>` 로 추가한다.

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.gambling-crawler.nightly</string>
+  <key>ProgramArguments</key><array><string>/bin/zsh</string><string>-lc</string><string>/Users/seongmin/gambling-content-detection/scripts/nightly.sh</string></array>
+  <key>WorkingDirectory</key><string>/Users/seongmin/gambling-content-detection</string>
+  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>4</integer><key>Minute</key><integer>30</integer></dict>
+  <key>StandardOutPath</key><string>/Users/seongmin/gambling-content-detection/out/launchd.log</string>
+  <key>StandardErrorPath</key><string>/Users/seongmin/gambling-content-detection/out/launchd.log</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/usr/local/bin:/usr/bin:/bin</string><key>LANG</key><string>ko_KR.UTF-8</string></dict>
+</dict></plist>
