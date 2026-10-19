@@ -42,3 +42,8 @@ def test_build_row_and_csv_roundtrip(tmp_path):
     assert back[0] == r and back[1].signals == ["blocked_kr"] and back[1].verdict == "" and back[1].suggested == "blocked"
     assert p.read_text(encoding="utf-8").splitlines()[0] == ",".join(REVIEW_HEADER)
     assert VERDICTS == ("gambling", "embedded_banner", "hard_negative", "normal", "community", "exclude", "blocked", "")
+
+
+def test_signals_malformed_url_does_not_raise():
+    assert signals("x.com", [row(0, url="http://[bad")]) == []
+    assert signals("x.com", [row(0, final_url="http://[bad")]) == []

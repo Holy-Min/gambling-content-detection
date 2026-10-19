@@ -37,7 +37,11 @@ class ReviewRow:
 def _has_ref_param(url: str | None) -> bool:
     if not url:
         return False
-    return any(k.lower() in REF_KEYS for k, _ in parse_qsl(urlsplit(url).query, keep_blank_values=True))
+    try:
+        query = urlsplit(url).query
+        return any(k.lower() in REF_KEYS for k, _ in parse_qsl(query, keep_blank_values=True))
+    except ValueError:  # 깨진 URL(잘못된 IPv6 등)은 신호 없음으로 처리
+        return False
 
 
 def home_row(rows: list[dict]) -> dict | None:
