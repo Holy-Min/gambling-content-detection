@@ -48,34 +48,49 @@ def apply_promotion(actions: list[Action], settings: Settings, seeds_dir: Path, 
     candidates = seeds_dir / "candidates.csv"
     community = seeds_dir / "community_lists.csv"
     counts = {k: 0 for k in (SKIP, PROMOTE, COMMUNITY, EXCLUDE, BLOCKED, DONE)}
-    notes: dict[str, str] = {}
     for a in actions:
         r = a.row
         counts[a.kind] += 1
-        if a.kind in (SKIP, DONE):
+        if a.kind == SKIP:
+            continue
+        if a.kind == DONE:
+            # 중간에 죽은 이전 실행의 잔여물 정리: 리뷰 색인 행 제거 + 아직 미갱신인 note 채움
+            review.remove_domain(CANDIDATE_LABEL, r.domain)
+            current = {registrable_domain(c["url"]): c.get("note", "") for c in read_rows(candidates)}.get(r.domain)
+            if current is not None and (current.startswith("review:") or current == "unverified"):
+                update_notes(candidates, {r.domain: _note_for(r, today)})
             continue
         if a.kind == PROMOTE:
             append_seed(seeds_dir / f"{r.verdict}.csv", r.url, source=f"review:{today}", note=r.note or "nightly 승격", added_at=today)
             rows = review.rows_for(CANDIDATE_LABEL, r.domain)
             if rows:
                 main.adopt_domain(review.domain_dir(CANDIDATE_LABEL, r.domain), rows, r.verdict)
-            review.remove_domain(CANDIDATE_LABEL, r.domain)
-            notes[r.domain] = f"→ {r.verdict}.csv (review {today})"
+                review.remove_domain(CANDIDATE_LABEL, r.domain)
+            else:
+                print(f"[promote] {r.domain}: 리뷰 행이 없어 폴더를 그대로 둠")
         elif a.kind == COMMUNITY:
             if not append_seed(community, r.url, source=f"review:{today}", note=r.note or "검토 승인", added_at=today):
                 update_source(community, r.domain, f"review:{today}")
             review.remove_domain(CANDIDATE_LABEL, r.domain)
-            notes[r.domain] = f"→ community_lists.csv (review {today})"
         elif a.kind == EXCLUDE:
             review.remove_domain(CANDIDATE_LABEL, r.domain)
             if any(registrable_domain(c["url"]) == r.domain and c["source"].startswith("auto:") for c in read_rows(community)):
                 remove_domain(community, r.domain)   # 자동 등록된 커뮤니티를 사람이 되돌린 것
-            notes[r.domain] = f"excluded: {r.note or '검토 제외'}"
-        elif a.kind == BLOCKED:
+        else:
             review.remove_domain(CANDIDATE_LABEL, r.domain)
-            notes[r.domain] = f"blocked_kr {today}"
-    update_notes(candidates, notes)
+        update_notes(candidates, {r.domain: _note_for(r, today)})   # 행마다 즉시 기록(재실행 안전)
     return counts
+
+
+def _note_for(r: ReviewRow, today: str) -> str:
+    """판정에 대응하는 candidates.csv note 문자열."""
+    if r.verdict in LABELS:
+        return f"→ {r.verdict}.csv (review {today})"
+    if r.verdict == "community":
+        return f"→ community_lists.csv (review {today})"
+    if r.verdict == "exclude":
+        return f"excluded: {r.note or '검토 제외'}"
+    return f"blocked_kr {today}"
 
 
 def run_promote(csv_path: Path, settings: Settings, seeds_dir: Path, *, today: str, dry_run: bool = False) -> int:

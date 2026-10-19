@@ -79,3 +79,69 @@ def test_promote_rejects_bad_verdict_and_dry_run_changes_nothing(tmp_path):
     write_review_csv(csv_path, [rr("g.com", "gambling", d)])
     assert run_promote(csv_path, settings, sd, today="2026-10-20", dry_run=True) == 0
     assert Path(d).exists() and not (sd / "gambling.csv").exists() and read_rows(sd / "candidates.csv")[0]["note"] == "review: 2026-10-20"
+
+
+def _two_label_setup(tmp_path):
+    settings = settings_for(tmp_path)
+    sd = make_seeds(tmp_path, ["a.com", "b.com"])
+    dirs = {d: make_review(settings, d) for d in ("a.com", "b.com")}
+    csv_path = tmp_path / "review.csv"
+    write_review_csv(csv_path, [rr("a.com", "gambling", dirs["a.com"]), rr("b.com", "gambling", dirs["b.com"])])
+    return settings, sd, dirs, csv_path
+
+
+def test_promote_mid_run_failure_keeps_progress_and_rerun_finishes(tmp_path, monkeypatch):
+    settings, sd, dirs, csv_path = _two_label_setup(tmp_path)
+    real = Store.adopt_domain
+    calls = []
+
+    def flaky(self, *args, **kwargs):
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("boom")
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Store, "adopt_domain", flaky)
+    try:
+        run_promote(csv_path, settings, sd, today="2026-10-20")
+        raise AssertionError("expected failure")
+    except RuntimeError:
+        pass
+    review = Store(settings.review_root, settings.salt)
+    notes = {c["url"]: c["note"] for c in read_rows(sd / "candidates.csv")}
+    assert notes["https://a.com/"] == "→ gambling.csv (review 2026-10-20)" and notes["https://b.com/"] == "review: 2026-10-20"
+    assert review.rows_for("candidate", "a.com") == [] and review.rows_for("candidate", "b.com") != []
+    monkeypatch.setattr(Store, "adopt_domain", real)
+    assert run_promote(csv_path, settings, sd, today="2026-10-20") == 0
+    main = Store(settings.out_root, settings.salt)
+    assert main.ok_count("gambling", "b.com") == 2 and main.ok_count("gambling", "a.com") == 2
+    review = Store(settings.review_root, settings.salt)   # 디스크에서 다시 읽음
+    assert review.rows_for("candidate", "a.com") == [] and review.rows_for("candidate", "b.com") == []
+    notes = {c["url"]: c["note"] for c in read_rows(sd / "candidates.csv")}
+    assert notes["https://b.com/"] == "→ gambling.csv (review 2026-10-20)"
+
+
+def test_promote_done_row_cleans_leftover_rows_and_note(tmp_path):
+    import shutil
+    settings, sd, dirs, csv_path = _two_label_setup(tmp_path)
+    shutil.rmtree(dirs["a.com"])   # 폴더만 사라지고 색인 행은 남은 상태
+    review = Store(settings.review_root, settings.salt)
+    assert review.rows_for("candidate", "a.com") != []
+    assert run_promote(csv_path, settings, sd, today="2026-10-20") == 0
+    review = Store(settings.review_root, settings.salt)   # 디스크에서 다시 읽음
+    assert review.rows_for("candidate", "a.com") == []
+    notes = {c["url"]: c["note"] for c in read_rows(sd / "candidates.csv")}
+    assert notes["https://a.com/"] == "→ gambling.csv (review 2026-10-20)"
+
+
+def test_promote_label_verdict_without_rows_keeps_folder(tmp_path, capsys):
+    settings = settings_for(tmp_path)
+    sd = make_seeds(tmp_path, ["g.com"])
+    d = tmp_path / "review_dir_only"; d.mkdir(); (d / "x.png").write_bytes(b"png")
+    csv_path = tmp_path / "review.csv"
+    write_review_csv(csv_path, [rr("g.com", "gambling", str(d))])
+    assert run_promote(csv_path, settings, sd, today="2026-10-20") == 0
+    assert d.exists() and (d / "x.png").exists()
+    assert "[promote] g.com: 리뷰 행이 없어 폴더를 그대로 둠" in capsys.readouterr().out
+    assert read_rows(sd / "gambling.csv")[0]["url"] == "https://g.com/"
+    assert {c["url"]: c["note"] for c in read_rows(sd / "candidates.csv")}["https://g.com/"] == "→ gambling.csv (review 2026-10-20)"
