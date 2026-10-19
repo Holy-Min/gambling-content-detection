@@ -18,3 +18,16 @@ def test_external_domains_urls_filters_same_domain_platform_and_dups():
     hrefs = ["https://verify.com/a", "https://www.site-a.com/x", "https://site-a.com/y", "https://naver.com/blog",
              "javascript:void(0)", "https://site-b.net/", "https://t.me/chan"]
     assert external_domains_urls(hrefs, "verify.com") == ["https://www.site-a.com/x", "https://site-b.net/"]
+
+
+from crawler.discover import SearchTally
+
+
+def test_search_tally_flags_bot_check_after_consecutive_zero_results():
+    t = SearchTally(stop_after=2)
+    t.add("a", links=10, added=3); t.add("b", links=0, added=0); t.add("c", links=5, added=0)
+    assert not t.bot_check and t.zero_streak == 0 and t.total_added == 3
+    t.add("d", links=0, added=0)
+    assert not t.bot_check and t.zero_streak == 1
+    t.add("e", links=0, added=0)
+    assert t.bot_check and t.links == {"a": 10, "b": 0, "c": 5, "d": 0, "e": 0} and t.added["a"] == 3

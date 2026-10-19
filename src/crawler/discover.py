@@ -12,7 +12,7 @@ from .blocked import is_blocked_kr
 from .browser import attach_page_guards, new_context, open_browser
 from .config import Settings
 from .domains import registrable_domain
-from .seeds import append_candidates, is_platform, read_seeds
+from .seeds import append_candidates, is_platform, read_keywords, read_seeds
 
 # DuckDuckGo HTML 엔드포인트는 헤드리스 브라우저에 403을 돌려주어(2026-09 확인) Yahoo 검색을 쓴다.
 SEARCH_URL = "https://search.yahoo.com/search?p={q}"
@@ -107,17 +107,39 @@ async def discover_community(settings: Settings, community_csv: Path, out_csv: P
     return added_total
 
 
-async def discover_search(settings: Settings, keywords_path: Path, out_csv: Path, known_domains: set[str],
-                          per_keyword: int = 20) -> int:
-    """키워드마다 새 브라우저 컨텍스트를 쓴다. 같은 컨텍스트로 질의를 반복하면 Yahoo가 봇 확인 페이지로 보낸다."""
-    keywords = [k.strip() for k in Path(keywords_path).read_text(encoding="utf-8").splitlines()
-                if k.strip() and not k.startswith("#")]
-    added_total = 0
+class SearchTally:
+    """키워드별 결과·추가 수. 결과 링크 0개가 stop_after 번 연속이면 Yahoo 봇 확인으로 보고 bot_check 를 켠다."""
+
+    def __init__(self, stop_after: int = 2):
+        self.stop_after = stop_after
+        self.links: dict[str, int] = {}
+        self.added: dict[str, int] = {}
+        self.zero_streak = 0
+        self.bot_check = False
+
+    def add(self, keyword: str, links: int, added: int) -> None:
+        self.links[keyword] = links
+        self.added[keyword] = added
+        self.zero_streak = self.zero_streak + 1 if links == 0 else 0
+        if self.zero_streak >= self.stop_after:
+            self.bot_check = True
+
+    @property
+    def total_added(self) -> int:
+        return sum(self.added.values())
+
+
+async def discover_search_keywords(settings: Settings, keywords: list[str], out_csv: Path, known_domains: set[str],
+                                   per_keyword: int = 20, stop_after_zero: int | None = 2) -> SearchTally:
+    """키워드마다 새 브라우저 컨텍스트를 쓴다(같은 컨텍스트로 질의를 반복하면 Yahoo가 봇 확인 페이지로 보낸다).
+    stop_after_zero 가 있으면 결과 0개가 그만큼 연속일 때 멈춘다(야간 루프). None 이면 끝까지 돈다(수동)."""
+    tally = SearchTally(stop_after_zero if stop_after_zero else 10 ** 9)
     async with async_playwright() as pw:
         browser = await open_browser(pw)
         try:
             for kw in keywords:
                 context = await new_context(pw, browser, settings)
+                links: list[str] = []
                 try:
                     page = await context.new_page(); attach_page_guards(page)
                     await page.goto(SEARCH_URL.format(q=quote(kw)), wait_until="load", timeout=settings.page_timeout_ms)
@@ -128,15 +150,25 @@ async def discover_search(settings: Settings, keywords_path: Path, out_csv: Path
                     links = parse_search_links(hrefs)[:per_keyword]
                 except Exception as e:
                     print(f"[search] {kw}: {type(e).__name__}")
-                    continue
                 finally:
                     await context.close()
                 urls = external_domains_urls(links, "yahoo.com")
                 added = append_candidates(out_csv, urls, source=f"search:{kw}", known_domains=known_domains)
                 known_domains.update(registrable_domain(u) for u in added)
-                added_total += len(added)
+                tally.add(kw, len(links), len(added))
                 print(f"[search] {kw}: 결과 {len(links)}개 중 {len(added)}개 추가")
+                if tally.bot_check:
+                    print(f"[search] 결과 0개가 {tally.stop_after}회 연속 — 봇 확인으로 보고 중단")
+                    break
                 await asyncio.sleep(4.0)
         finally:
             await browser.close()
-    return added_total
+    return tally
+
+
+async def discover_search(settings: Settings, keywords_path: Path, out_csv: Path, known_domains: set[str],
+                          per_keyword: int = 20) -> int:
+    """키워드 파일을 읽어 조기 종료 없이 수확한다(수동 실행용)."""
+    tally = await discover_search_keywords(settings, read_keywords(Path(keywords_path)), out_csv, known_domains,
+                                           per_keyword, stop_after_zero=None)
+    return tally.total_added
