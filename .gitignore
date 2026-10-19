@@ -23,5 +23,8 @@ venv/
 .env
 .DS_Store
 
+# 야간 루프 산출물
+out/
+
 # Python packaging
 *.egg-info/
