@@ -9,12 +9,12 @@ from pathlib import Path
 
 from .config import LABELS, load_settings
 from .domains import registrable_domain
-from .seeds import load_blocklist, read_seeds, seed_domains
+from .seeds import all_seed_files, load_blocklist, read_seeds, seed_domains
 from .stats import format_table, summarize
 from .store import Store
 
 SEEDS_DIR = Path("seeds")
-ALL_SEED_FILES = [SEEDS_DIR / f"{lab}.csv" for lab in LABELS] + [SEEDS_DIR / "community_lists.csv", SEEDS_DIR / "candidates.csv"]
+ALL_SEED_FILES = all_seed_files(SEEDS_DIR)
 
 
 def build_parser() -> argparse.ArgumentParser:
