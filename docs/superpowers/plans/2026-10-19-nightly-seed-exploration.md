@@ -1289,7 +1289,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `src/crawler/explore.py`, `tests/fixtures/site/community.html`, `tests/conftest.py`
-- Modify: `tests/test_capture_integration.py` (픽스처를 conftest 로 이동)
+- Modify: `tests/test_capture_integration.py` (픽스처를 conftest 로 이동 + 마감 테스트 1개), `src/crawler/capture.py` (협조적 마감 `deadline`)
 - Test: `tests/test_explore.py`
 
 **Interfaces:**
@@ -1299,7 +1299,8 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   - `@dataclass ExploreResult(precaptured: int, capture_summary: dict, review_rows: list[ReviewRow], review_csv: Path | None, auto_communities: list[str], keywords_added: list[str], keywords_retired: list[str], timed_out: bool)`
   - `select_candidates(candidates_csv: Path, max_n: int, blocklist: set[str] = frozenset()) -> list[Seed]`
   - `candidate_settings(settings) -> Settings`
-  - `precapture(settings, seeds, store, budget_sec=None) -> tuple[dict, bool]`
+  - `precapture(settings, seeds, store, budget_sec=None) -> tuple[dict, bool]` — `asyncio.wait_for` 로 취소하지 않는다(Playwright 기동 중 취소는 이벤트 루프를 멈춘다). 대신 `run_capture(..., deadline=time.monotonic() + budget_sec)` 협조적 마감을 쓰고, 요약의 `skipped_deadline`·`deadline_hit` 가 0 보다 크면 `timed_out=True`
+  - (capture.py 추가) `run_capture(..., deadline: float | None = None)`, `capture_domain(..., deadline=None)`: 도메인 시작 전에 마감이 지났으면 `summary["skipped_deadline"] += 1` 하고 건너뛰며, 페이지 루프 안에서 마감이 지나면 `stats["deadline_hit"] = 1` 로 끊는다(메뉴 단계도 마감 뒤엔 생략). 두 키 모두 요약에 항상 존재(기본 0)
   - `review_rows_for(store, seeds) -> list[ReviewRow]`
   - `register_communities(rows, community_csv, today, max_n) -> list[str]`
   - `expand_keywords(settings, seeds_dir, main_store, extra_titles) -> tuple[list[str], list[str]]`
@@ -1440,13 +1441,30 @@ async def test_run_explore_suggests_gambling_and_expands_keywords(site, tmp_path
     assert (sd / "explore_state.json").exists()
 
 
-async def test_run_explore_budget_timeout_keeps_partial_results(site, tmp_path):
+async def test_run_explore_budget_already_spent_skips_capture_but_writes_review(site, tmp_path):
     settings = fast_settings(tmp_path)
     sd = make_seeds(tmp_path, [cand(site + "/")])
     out = tmp_path / "out" / "t"
-    res = await run_explore(settings, seeds_dir=sd, out_dir=out, today="2026-10-20", budget_sec=0.01)
-    assert res.timed_out is True and res.capture_summary == {} and res.precaptured in (0, 1)
-    assert (out / "review.csv").exists()
+    res = await run_explore(settings, seeds_dir=sd, out_dir=out, today="2026-10-20", budget_sec=0.0)
+    assert res.timed_out is True and res.capture_summary["skipped_deadline"] == 1 and res.capture_summary["ok"] == 0
+    assert res.precaptured == 0 and res.review_rows == [] and (out / "review.csv").exists()
+    assert read_rows(sd / "candidates.csv")[0]["note"] == "unverified"   # 마감에 못 간 후보는 다음 밤에 다시 고른다
+```
+
+`tests/test_capture_integration.py` 끝에 추가(파일 위에 `import time` 추가):
+
+```python
+async def test_run_capture_deadline_in_the_past_skips_every_domain(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    summary = await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-10-20")], label="gambling", deadline=time.monotonic())
+    assert summary["skipped_deadline"] == 1 and summary["deadline_hit"] == 0 and summary["ok"] == 0 and summary["domains"] == 0
+    assert not (settings.out_root / "index.jsonl").exists()
+
+
+async def test_run_capture_far_deadline_changes_nothing(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    summary = await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-10-20")], label="gambling", deadline=time.monotonic() + 600)
+    assert summary["ok"] == 2 and summary["skipped_deadline"] == 0 and summary["deadline_hit"] == 0
 ```
 
 - [ ] **Step 4: 실패 확인**
@@ -1460,7 +1478,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'crawler.explore'`.
 """시드 탐색: 후보 선캡처(리뷰 루트) → 신호·추천 → 커뮤니티 자동 등록 → review.csv → candidates note 갱신 → 키워드 확장."""
 from __future__ import annotations
 
-import asyncio
+import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -1510,14 +1528,11 @@ def candidate_settings(settings: Settings) -> Settings:
 
 
 async def precapture(settings: Settings, seeds: list[Seed], store: Store, budget_sec: float | None = None) -> tuple[dict, bool]:
-    """후보를 candidate 라벨로 리뷰 루트에 캡처한다. 예산이 끝나면 중단한다. (요약, 중단 여부). 중단돼도 그때까지의 행은 store 에 남아 있다."""
-    coro = run_capture(candidate_settings(settings), seeds, label=CANDIDATE_LABEL, store=store)
-    if budget_sec is None:
-        return await coro, False
-    try:
-        return await asyncio.wait_for(coro, timeout=budget_sec), False
-    except asyncio.TimeoutError:
-        return {}, True
+    """후보를 candidate 라벨로 리뷰 루트에 캡처한다. 예산은 협조적 마감(deadline)으로 건다 — Playwright 기동 중 태스크를 취소하면
+    이벤트 루프가 멈추므로 asyncio.wait_for 를 쓰지 않는다. (요약, 마감에 걸렸는지). 마감에 걸려도 그때까지의 행은 store 에 남아 있다."""
+    deadline = None if budget_sec is None else time.monotonic() + budget_sec
+    summary = await run_capture(candidate_settings(settings), seeds, label=CANDIDATE_LABEL, store=store, deadline=deadline)
+    return summary, bool(summary.get("skipped_deadline") or summary.get("deadline_hit"))
 
 
 def review_rows_for(store: Store, seeds: list[Seed]) -> list[ReviewRow]:
@@ -1581,6 +1596,26 @@ async def run_explore(settings: Settings, *, seeds_dir: Path, out_dir: Path, tod
     return res
 ```
 
+- [ ] **Step 5a: capture.py 에 협조적 마감 추가**
+
+`run_capture` 와 `capture_domain` 에 `deadline: float | None = None` (time.monotonic 기준) 키워드 인자를 더한다.
+
+```python
+# capture_domain: stats 초기값에 "deadline_hit": 0 추가, while 루프 첫 줄에
+            if deadline is not None and time.monotonic() >= deadline:
+                stats["deadline_hit"] = 1
+                break
+# 홈 처리 뒤 메뉴 단계 조건에 마감 검사 추가
+                if settings.click_menus and meta["status"] in ("ok", "duplicate") and not (deadline is not None and time.monotonic() >= deadline):
+# run_capture: summary 초기값에 "skipped_deadline": 0, "deadline_hit": 0 추가, work() 안 sem 획득 직후
+                    if deadline is not None and time.monotonic() >= deadline:
+                        summary["skipped_deadline"] += 1
+                        return
+# capture_domain 호출에 deadline=deadline 전달
+```
+
+`skipped_deadline` 은 시작도 못 한 도메인 수, `deadline_hit` 은 중간에 끊긴 도메인 수다. 마감 검사는 페이지 사이에서만 하므로 페이지 1개 분량(최대 약 1분)은 넘길 수 있다.
+
 - [ ] **Step 6: 통과 확인**
 
 Run: `.venv/bin/pytest -q`
@@ -1589,8 +1624,8 @@ Expected: 전부 PASS. (`test_run_explore_suggests_gambling_and_expands_keywords
 - [ ] **Step 7: 커밋**
 
 ```bash
-git add src/crawler/explore.py tests/test_explore.py tests/conftest.py tests/test_capture_integration.py tests/fixtures/site/community.html
-git commit -m "feat(crawler): explore — precapture candidates into review root, auto-register communities, write review.csv, expand keywords
+git add src/crawler/explore.py src/crawler/capture.py tests/test_explore.py tests/conftest.py tests/test_capture_integration.py tests/fixtures/site/community.html
+git commit -m "feat(crawler): explore — precapture candidates into review root, auto-register communities, write review.csv, expand keywords; cooperative capture deadline
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
@@ -1831,7 +1866,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   - `WORK_STAGES = ("search", "community", "explore", "capture")`, 상태 `OK, PARTIAL, FAILED, SKIPPED = "ok", "partial", "failed", "skipped"`
   - `@dataclass StageResult(name, status, elapsed: float, counts: dict, error: str | None)`
   - `StageFn = Callable[[float], Awaitable[dict]]` (인자 = 예산 초; 결과 dict 에 `timed_out: True` 가 있으면 partial)
-  - `class Runner(settings, *, seeds_dir, out_base, today, only=None, skip=None, budget_min=90, dry_run=False, stages=None, grace_sec=5.0)` — `.run() -> int`, `.results`, `.explore_result`, `.out_dir`, `.dry_run_plan() -> str`, `.exit_code() -> int`
+  - `class Runner(settings, *, seeds_dir, out_base, today, only=None, skip=None, budget_min=90, dry_run=False, stages=None, grace_sec=300.0, hard_kill_grace_sec=900.0)` — 단계 함수는 스스로 협조적 마감을 지키고(`run_capture(deadline=)`), `wait_for(budget + grace_sec)` 는 안전망, `threading.Timer` 워치독이 전체 예산 + hard_kill_grace_sec 뒤 `os._exit(3)` — `.run() -> int`, `.results`, `.explore_result`, `.out_dir`, `.dry_run_plan() -> str`, `.exit_code() -> int`
   - `acquire_lock(path) -> bool`, `release_lock(path) -> None`, `pid_alive(pid) -> bool`
   - `daily_counts(rows, today) -> dict[label, {status…, total_ok}]`, `stale_review_count(rows, today, days) -> int`
   - `make_thumbs(rows: list[ReviewRow], thumbs_dir) -> dict[domain, 상대경로]`, `prune_out(out_base, today, keep_days) -> list[str]`
@@ -1950,6 +1985,7 @@ import asyncio
 import json
 import os
 import shutil
+import threading
 import time
 import traceback
 from dataclasses import asdict, dataclass, field, replace
@@ -2142,7 +2178,7 @@ def build_report(*, today: str, results: list[StageResult], daily: dict, review_
 class Runner:
     def __init__(self, settings: Settings, *, seeds_dir: Path, out_base: Path, today: str, only: list[str] | None = None,
                  skip: list[str] | None = None, budget_min: float = 90, dry_run: bool = False,
-                 stages: dict[str, StageFn] | None = None, grace_sec: float = 5.0):
+                 stages: dict[str, StageFn] | None = None, grace_sec: float = 300.0, hard_kill_grace_sec: float = 900.0):
         self.settings = settings
         self.seeds_dir = Path(seeds_dir)
         self.out_base = Path(out_base)
@@ -2151,7 +2187,8 @@ class Runner:
         self.wanted = [s for s in WORK_STAGES if (not only or s in only) and s not in (skip or [])]
         self.budget_sec = budget_min * 60
         self.dry_run = dry_run
-        self.grace_sec = grace_sec
+        self.grace_sec = grace_sec                       # wait_for 안전망 유예(단계 함수가 스스로 마감을 지키므로 평소엔 안 걸린다)
+        self.hard_kill_grace_sec = hard_kill_grace_sec   # 전체 예산 + 이 유예가 지나면 os._exit(3) — 취소가 멈춰도 프로세스는 끝난다
         self.stages = stages if stages is not None else self.default_stages()
         self.results: list[StageResult] = []
         self.explore_result: ExploreResult | None = None
@@ -2206,15 +2243,13 @@ class Runner:
                 continue
             seeds = [s for s in read_seeds(self.seeds_dir / f"{label}.csv") if registrable_domain(s.url) not in blocklist]
             s = replace(self.settings, click_menus=(label == "gambling"), refresh=False)
-            try:
-                summary = await asyncio.wait_for(
-                    run_capture(s, seeds, label=label, emit_candidates=(label == "embedded_banner"),
-                                candidates_path=self.seeds_dir / "candidates.csv", known_domains=frozenset(self.known())),
-                    timeout=remaining)
-                counts["labels"][label] = {"status": "ok", **summary}
-            except asyncio.TimeoutError:
-                counts["labels"][label] = {"status": "timeout"}
-                counts["timed_out"] = True
+            # 취소(wait_for) 대신 협조적 마감: Playwright 기동 중 취소는 이벤트 루프를 멈춘다
+            summary = await run_capture(s, seeds, label=label, emit_candidates=(label == "embedded_banner"),
+                                        candidates_path=self.seeds_dir / "candidates.csv", known_domains=frozenset(self.known()),
+                                        deadline=deadline)
+            cut = bool(summary.get("skipped_deadline") or summary.get("deadline_hit"))
+            counts["labels"][label] = {"status": "timeout" if cut else "ok", **summary}
+            counts["timed_out"] = counts["timed_out"] or cut
         return counts
 
     # 실행 ------------------------------------------------------------------
@@ -2247,8 +2282,23 @@ class Runner:
         bad = any(r.status in (PARTIAL, FAILED) or (r.status == SKIPPED and r.error == BUDGET_EXHAUSTED) for r in self.results)
         return 1 if bad else 0
 
+    def _hard_exit(self) -> None:
+        try:
+            self._log(f"하드 타임아웃({(self.budget_sec + self.hard_kill_grace_sec) / 60:.0f}분): 프로세스를 강제 종료한다(종료 코드 3)")
+        finally:
+            os._exit(3)
+
     async def run(self) -> int:
         self.out_dir.mkdir(parents=True, exist_ok=True)
+        watchdog = threading.Timer(self.budget_sec + self.hard_kill_grace_sec, self._hard_exit)
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            return await self._run_stages()
+        finally:
+            watchdog.cancel()
+
+    async def _run_stages(self) -> int:
         for name in WORK_STAGES:
             if name not in self.wanted:
                 self.results.append(StageResult(name, SKIPPED, 0.0, {}, None))
@@ -2601,7 +2651,7 @@ launchctl bootout gui/$(id -u)/com.gambling-crawler.nightly         # 해제
 - 잠금이 남아 실행이 거부되면(`out/.lock`): 살아 있는 프로세스가 없을 때만 지운다.
 
 ## 종료 코드
-0 정상 · 1 일부 단계 실패/부분(보고서의 실패 섹션 확인) · 2 실행 불가(`.env`/CRAWLER_SALT 없음, 잠금, 저장 루트 쓰기 불가)
+0 정상 · 1 일부 단계 실패/부분(보고서의 실패 섹션 확인) · 2 실행 불가(`.env`/CRAWLER_SALT 없음, 잠금, 저장 루트 쓰기 불가) · 3 하드 타임아웃(전체 예산 + 15분, 보고서 없이 강제 종료 — `out/launchd.log` 와 `run.log` 확인)
 ```
 
 - [ ] **Step 4: `seeds/README.md` 의 "실행 순서" 아래에 절을 추가**
