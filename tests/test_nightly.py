@@ -90,3 +90,15 @@ def test_make_thumbs_crops_first_viewport(tmp_path):
     assert got == {"a.com": "thumbs/abc.png"}
     w, h = Image.open(tmp_path / "out" / "thumbs" / "abc.png").size
     assert w == 160 and h == 355   # 첫 화면(1830px)만 잘라 160px 폭으로
+
+
+def test_keywords_to_record_drops_trailing_zero_streak_on_bot_check():
+    from crawler.discover import SearchTally
+    from crawler.nightly import keywords_to_record
+    t = SearchTally(stop_after=2)
+    for kw, n in (("a", 10), ("b", 0), ("c", 5), ("d", 0), ("e", 0)):
+        t.add(kw, links=n, added=0)
+    assert t.bot_check and keywords_to_record(t) == ["a", "b", "c"]
+    ok = SearchTally(stop_after=2)
+    ok.add("x", links=0, added=0); ok.add("y", links=3, added=1)
+    assert keywords_to_record(ok) == ["x", "y"]

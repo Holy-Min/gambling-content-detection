@@ -95,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         settings = load_settings()
         known = seed_domains(ALL_SEED_FILES)
         if ns.kind == "community":
-            n = asyncio.run(discover_community(settings, Path(ns.seeds), Path(ns.out), known))
+            n = asyncio.run(discover_community(settings, Path(ns.seeds), Path(ns.out), known)).added
         else:
             n = asyncio.run(discover_search(settings, Path(ns.keywords), Path(ns.out), known, ns.per_keyword))
         print(f"후보 {n}개 추가 → {ns.out}. 검토 후 seeds/gambling.csv로 옮기세요.")

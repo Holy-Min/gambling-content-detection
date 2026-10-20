@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
@@ -72,14 +74,28 @@ async def _collect_hrefs(page, url: str, settings: Settings) -> list[str]:
 RESET_MARKERS = ("ERR_CONNECTION_RESET", "ERR_CONNECTION_CLOSED", "ERR_SSL_PROTOCOL_ERROR")
 
 
-async def discover_community(settings: Settings, community_csv: Path, out_csv: Path, known_domains: set[str]) -> int:
-    """커뮤니티 페이지마다 새 컨텍스트를 쓴다(한 페이지의 오류가 다음 페이지로 번지지 않게)."""
+@dataclass
+class CommunityTally:
+    """커뮤니티 수집 결과: 추가된 후보 수, 열어 본 페이지 수, 마감 때문에 중단했는지."""
+    added: int = 0
+    pages: int = 0
+    timed_out: bool = False
+
+
+async def discover_community(settings: Settings, community_csv: Path, out_csv: Path, known_domains: set[str],
+                             deadline: float | None = None) -> CommunityTally:
+    """커뮤니티 페이지마다 새 컨텍스트를 쓴다(한 페이지의 오류가 다음 페이지로 번지지 않게).
+    deadline(time.monotonic 기준)이 지나면 다음 시드를 시작하지 않고 timed_out 으로 멈춘다."""
     seeds = read_seeds(community_csv)
-    added_total = 0
+    tally = CommunityTally()
     async with async_playwright() as pw:
         browser = await open_browser(pw)
         try:
             for seed in seeds:
+                if deadline is not None and time.monotonic() >= deadline:
+                    tally.timed_out = True
+                    break
+                tally.pages += 1
                 page_domain = registrable_domain(seed.url)
                 context = await new_context(pw, browser, settings)
                 try:
@@ -99,12 +115,12 @@ async def discover_community(settings: Settings, community_csv: Path, out_csv: P
                 urls = external_domains_urls(hrefs, page_domain)
                 added = append_candidates(out_csv, urls, source=f"community:{page_domain}", known_domains=known_domains)
                 known_domains.update(registrable_domain(u) for u in added)
-                added_total += len(added)
+                tally.added += len(added)
                 print(f"[community] {page_domain}: 외부 도메인 {len(urls)}개 중 {len(added)}개 추가")
                 await asyncio.sleep(settings.delays.get("gambling", 3.0))
         finally:
             await browser.close()
-    return added_total
+    return tally
 
 
 class SearchTally:
@@ -116,6 +132,7 @@ class SearchTally:
         self.added: dict[str, int] = {}
         self.zero_streak = 0
         self.bot_check = False
+        self.timed_out = False
 
     def add(self, keyword: str, links: int, added: int) -> None:
         self.links[keyword] = links
@@ -130,14 +147,19 @@ class SearchTally:
 
 
 async def discover_search_keywords(settings: Settings, keywords: list[str], out_csv: Path, known_domains: set[str],
-                                   per_keyword: int = 20, stop_after_zero: int | None = 2) -> SearchTally:
+                                   per_keyword: int = 20, stop_after_zero: int | None = 2,
+                                   deadline: float | None = None) -> SearchTally:
     """키워드마다 새 브라우저 컨텍스트를 쓴다(같은 컨텍스트로 질의를 반복하면 Yahoo가 봇 확인 페이지로 보낸다).
-    stop_after_zero 가 있으면 결과 0개가 그만큼 연속일 때 멈춘다(야간 루프). None 이면 끝까지 돈다(수동)."""
+    stop_after_zero 가 있으면 결과 0개가 그만큼 연속일 때 멈춘다(야간 루프). None 이면 끝까지 돈다(수동).
+    deadline(time.monotonic 기준)이 지나면 다음 키워드를 시작하지 않고 tally.timed_out 으로 멈춘다."""
     tally = SearchTally(stop_after_zero if stop_after_zero else 10 ** 9)
     async with async_playwright() as pw:
         browser = await open_browser(pw)
         try:
             for kw in keywords:
+                if deadline is not None and time.monotonic() >= deadline:
+                    tally.timed_out = True
+                    break
                 context = await new_context(pw, browser, settings)
                 links: list[str] = []
                 try:

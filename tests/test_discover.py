@@ -31,3 +31,13 @@ def test_search_tally_flags_bot_check_after_consecutive_zero_results():
     assert not t.bot_check and t.zero_streak == 1
     t.add("e", links=0, added=0)
     assert t.bot_check and t.links == {"a": 10, "b": 0, "c": 5, "d": 0, "e": 0} and t.added["a"] == 3
+
+
+def test_search_tally_timed_out_defaults_false():
+    assert SearchTally().timed_out is False
+
+
+def test_community_tally_fields():
+    from crawler.discover import CommunityTally
+    t = CommunityTally(added=3, pages=2, timed_out=True)
+    assert (t.added, t.pages, t.timed_out) == (3, 2, True)

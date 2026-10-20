@@ -18,7 +18,7 @@ from PIL import Image
 
 from .capture import run_capture
 from .config import LABELS, Settings
-from .discover import discover_community, discover_search_keywords
+from .discover import SearchTally, discover_community, discover_search_keywords
 from .domains import registrable_domain
 from .explore import ExploreResult, run_explore, select_candidates
 from .keywords import load_state, pick_auto_keywords, record_run, save_state
@@ -144,6 +144,15 @@ def prune_out(out_base: Path, today: str, keep_days: int) -> list[str]:
     return pruned
 
 
+def keywords_to_record(tally: SearchTally) -> list[str]:
+    """수확 기록에 남길 키워드. 봇 확인으로 멈췄으면 끝의 연속 0-링크 키워드는 빼서(봇 확인 탓일 뿐) zero_streak 이 오르지 않게 한다."""
+    kws = list(tally.added)
+    if tally.bot_check:
+        while kws and tally.links.get(kws[-1], 0) == 0:
+            kws.pop()
+    return kws
+
+
 def _cell(text: str, limit: int = 40) -> str:
     t = " ".join((text or "").split()).replace("|", "\\|")
     return t if len(t) <= limit else t[:limit - 1] + "…"
@@ -231,19 +240,23 @@ class Runner:
 
     async def stage_search(self, budget: float) -> dict:
         manual, auto = self.search_keywords()
-        tally = await discover_search_keywords(self.settings, manual + auto, self.seeds_dir / "candidates.csv", self.known(), stop_after_zero=2)
+        tally = await discover_search_keywords(self.settings, manual + auto, self.seeds_dir / "candidates.csv", self.known(), stop_after_zero=2,
+                                               deadline=time.monotonic() + budget)
         state_path = self.seeds_dir / "explore_state.json"
         state = load_state(state_path)
-        for kw, added in tally.added.items():
-            record_run(state, kw, added, self.today, origin="manual" if kw in manual else "auto")
+        for kw in keywords_to_record(tally):
+            record_run(state, kw, tally.added[kw], self.today, origin="manual" if kw in manual else "auto")
         if tally.bot_check:
             state["bot_check_date"] = self.today
         save_state(state_path, state)
-        return {"keywords": len(tally.added), "auto_keywords": auto, "candidates_added": tally.total_added, "bot_check": tally.bot_check}
+        return {"keywords": len(tally.added), "auto_keywords": auto, "candidates_added": tally.total_added, "bot_check": tally.bot_check,
+                "timed_out": tally.timed_out}
 
     async def stage_community(self, budget: float) -> dict:
-        n = await discover_community(self.settings, self.seeds_dir / "community_lists.csv", self.seeds_dir / "candidates.csv", self.known())
-        return {"communities": len(read_seeds(self.seeds_dir / "community_lists.csv")), "candidates_added": n}
+        tally = await discover_community(self.settings, self.seeds_dir / "community_lists.csv", self.seeds_dir / "candidates.csv", self.known(),
+                                         deadline=time.monotonic() + budget)
+        return {"communities": len(read_seeds(self.seeds_dir / "community_lists.csv")), "candidates_added": tally.added,
+                "pages": tally.pages, "timed_out": tally.timed_out}
 
     async def stage_explore(self, budget: float) -> dict:
         res = await run_explore(self.settings, seeds_dir=self.seeds_dir, out_dir=self.out_dir, today=self.today, budget_sec=max(1.0, budget - 60))
