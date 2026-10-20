@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from PIL import Image
@@ -15,6 +15,15 @@ KST = timezone(timedelta(hours=9))
 
 def now_kst() -> datetime:
     return datetime.now(KST)
+
+
+def _day(dt: datetime) -> date:
+    """KST 달력 날짜. 재캡처 창은 24시간 슬라이딩이 아니라 이 날짜 차이로 잰다."""
+    return dt.astimezone(KST).date()
+
+
+def _within(at: datetime, now: datetime, days: int) -> bool:
+    return (_day(now) - _day(at)).days < days
 
 
 def ts_label(dt: datetime) -> str:
@@ -73,7 +82,7 @@ class Store:
         for m in self._index:
             if m["label"] != label or m["domain"] != domain or m["status"] != "ok":
                 continue
-            if days is None or now - datetime.fromisoformat(m["captured_at"]) <= timedelta(days=days):
+            if days is None or _within(datetime.fromisoformat(m["captured_at"]), now, days):
                 n += 1
         return n
 
@@ -84,7 +93,7 @@ class Store:
             if m.get("url_norm") != target:
                 continue
             at = datetime.fromisoformat(m["captured_at"])
-            if now - at <= timedelta(days=days):
+            if _within(at, now, days):
                 return True
         return False
 
@@ -113,7 +122,7 @@ class Store:
         if not homes:
             return False
         last = max(homes, key=lambda m: m["captured_at"])
-        return last["status"] == "blocked_kr" and now - datetime.fromisoformat(last["captured_at"]) <= timedelta(days=days)
+        return last["status"] == "blocked_kr" and _within(datetime.fromisoformat(last["captured_at"]), now, days)
 
     def rewrite_index(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)

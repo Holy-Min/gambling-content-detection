@@ -127,3 +127,26 @@ def test_adopt_domain_moves_files_and_relabels_rows(tmp_path):
     assert [m["label"] for m in meta_lines] == ["gambling", "gambling"]
     assert main.ok_count("gambling", "a.com") == 2 and Store(tmp_path, "salt").ok_count("gambling", "a.com") == 2
     assert review.remove_domain("candidate", "a.com", delete_files=False) == 2 and review.rows_for("candidate", "a.com") == []
+
+
+def test_recent_window_is_kst_calendar_day(tmp_path):
+    s = Store(tmp_path, "salt")
+    s.record(meta_idx("gambling", "a.com", "ok", 0, datetime(2026, 10, 19, 23, 0, tzinfo=KST), s))
+    s.record(meta(domain="b.com", url="https://a.com/y", at=datetime(2026, 10, 19, 23, 0, tzinfo=KST)))
+    s.record(meta(domain="b.com", url="https://a.com/t", at=datetime(2026, 10, 20, 4, 0, tzinfo=KST)))
+    early = datetime(2026, 10, 20, 0, 10, tzinfo=KST)
+    assert not s.seen_recently("https://a.com/y", days=1, now=early)       # 어제 행은 오늘 00:10 에 재촬영 대상
+    assert s.seen_recently("https://a.com/t", days=1, now=datetime(2026, 10, 20, 5, 0, tzinfo=KST))
+    assert not s.seen_recently("https://a.com/t", days=0, now=datetime(2026, 10, 20, 5, 0, tzinfo=KST))
+    assert s.ok_count("gambling", "a.com", days=1, now=early) == 0
+    s.record(meta_idx("gambling", "a.com", "ok", 1, datetime(2026, 10, 20, 4, 0, tzinfo=KST), s))
+    assert s.ok_count("gambling", "a.com", days=1, now=datetime(2026, 10, 20, 5, 0, tzinfo=KST)) == 1
+
+
+def test_recent_window_seven_calendar_days(tmp_path):
+    s = Store(tmp_path, "salt")
+    now = datetime(2026, 10, 20, 12, 0, tzinfo=KST)
+    s.record(meta(url="https://a.com/d7", at=datetime(2026, 10, 13, 23, 59, tzinfo=KST)))
+    s.record(meta(url="https://a.com/d6", at=datetime(2026, 10, 14, 0, 1, tzinfo=KST)))
+    assert not s.seen_recently("https://a.com/d7", days=7, now=now)
+    assert s.seen_recently("https://a.com/d6", days=7, now=now)
