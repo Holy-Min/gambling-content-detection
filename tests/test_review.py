@@ -63,3 +63,14 @@ def test_write_review_csv_merge_keeps_verdicts_and_pending_rows(tmp_path):
     assert got[1].verdict == ""
     write_review_csv(p, [new[1]])   # merge=False 는 덮어쓴다
     assert [r.domain for r in read_review_csv(p)] == ["c.com"]
+
+
+def test_write_review_csv_neutralizes_formula_cells(tmp_path):
+    p = tmp_path / "r.csv"
+    write_review_csv(p, [ReviewRow(domain="a.com", url="https://a.com/", title="=HYPERLINK(\"x\")", status="ok", note="+1"),
+                         ReviewRow(domain="b.com", url="https://b.com/", title="-2", status="ok", note="@x"),
+                         ReviewRow(domain="c.com", url="https://c.com/", title="평범", status="ok", note="메모")])
+    got = read_review_csv(p)
+    assert got[0].title == "'=HYPERLINK(\"x\")" and got[0].note == "'+1"
+    assert got[1].title == "'-2" and got[1].note == "'@x"
+    assert got[2].title == "평범" and got[2].note == "메모"

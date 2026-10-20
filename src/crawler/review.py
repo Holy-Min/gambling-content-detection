@@ -104,6 +104,11 @@ def build_row(domain: str, url: str, rows: list[dict], review_dir: str) -> Revie
                      signals=sig, suggested=suggest(sig), review_dir=review_dir)
 
 
+def _safe_cell(text: str) -> str:
+    """스프레드시트가 수식으로 해석하지 않게 =,+,-,@ 로 시작하는 셀 앞에 ' 를 붙인다(이미 붙어 있으면 그대로)."""
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
 def write_review_csv(path: Path, rows: list[ReviewRow], merge: bool = False) -> None:
     """review.csv 를 쓴다. merge=True 이고 파일이 있으면 같은 날짜 재실행으로 사람의 판정이 사라지지 않게 병합한다:
     review_dir 이 아직 있고 새 행에 없는 기존 도메인은 유지, 겹치는 도메인은 새 행에 기존 verdict·note 를 보존, 순서는 기존 먼저·새 행 뒤."""
@@ -123,7 +128,7 @@ def write_review_csv(path: Path, rows: list[ReviewRow], merge: bool = False) -> 
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(REVIEW_HEADER)
     for r in rows:
-        w.writerow([r.domain, r.url, r.title, r.status, "|".join(r.signals), r.suggested, r.verdict, r.note, r.review_dir])
+        w.writerow([r.domain, r.url, _safe_cell(r.title), r.status, "|".join(r.signals), r.suggested, r.verdict, _safe_cell(r.note), r.review_dir])
     atomic_write_text(path, buf.getvalue())
 
 

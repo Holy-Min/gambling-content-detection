@@ -102,3 +102,8 @@ def test_keywords_to_record_drops_trailing_zero_streak_on_bot_check():
     ok = SearchTally(stop_after=2)
     ok.add("x", links=0, added=0); ok.add("y", links=3, added=1)
     assert keywords_to_record(ok) == ["x", "y"]
+
+
+def test_cell_escapes_pipe_and_html_chars():
+    from crawler.nightly import _cell
+    assert _cell("a|<b>`c`") == "a\\|&lt;b&gt;\\`c\\`"

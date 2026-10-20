@@ -145,3 +145,18 @@ def test_promote_label_verdict_without_rows_keeps_folder(tmp_path, capsys):
     assert "[promote] g.com: 리뷰 행이 없어 폴더를 그대로 둠" in capsys.readouterr().out
     assert read_rows(sd / "gambling.csv")[0]["url"] == "https://g.com/"
     assert {c["url"]: c["note"] for c in read_rows(sd / "candidates.csv")}["https://g.com/"] == "→ gambling.csv (review 2026-10-20)"
+
+
+def test_promote_removes_auto_community_row_for_non_community_verdicts(tmp_path):
+    settings = settings_for(tmp_path)
+    sd = make_seeds(tmp_path, ["autocomm.com", "autoex.com", "manual.com"])
+    write_rows(sd / "community_lists.csv", [
+        {"url": "https://autocomm.com/", "source": "auto:2026-10-20", "added_at": "2026-10-20", "note": "자동"},
+        {"url": "https://autoex.com/", "source": "auto:2026-10-20", "added_at": "2026-10-20", "note": "자동"},
+        {"url": "https://manual.com/", "source": "review:2026-10-01", "added_at": "2026-10-01", "note": "사람"}])
+    dirs = {d: make_review(settings, d) for d in ("autocomm.com", "autoex.com", "manual.com")}
+    csv_path = tmp_path / "review.csv"
+    write_review_csv(csv_path, [rr("autocomm.com", "gambling", dirs["autocomm.com"]), rr("autoex.com", "blocked", dirs["autoex.com"]),
+                                rr("manual.com", "gambling", dirs["manual.com"])])
+    assert run_promote(csv_path, settings, sd, today="2026-10-20") == 0
+    assert [c["url"] for c in read_rows(sd / "community_lists.csv")] == ["https://manual.com/"]   # 사람이 넣은 행은 유지

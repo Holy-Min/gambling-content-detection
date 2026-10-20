@@ -74,12 +74,18 @@ def apply_promotion(actions: list[Action], settings: Settings, seeds_dir: Path, 
             review.remove_domain(CANDIDATE_LABEL, r.domain)
         elif a.kind == EXCLUDE:
             review.remove_domain(CANDIDATE_LABEL, r.domain)
-            if any(registrable_domain(c["url"]) == r.domain and c["source"].startswith("auto:") for c in read_rows(community)):
-                remove_domain(community, r.domain)   # 자동 등록된 커뮤니티를 사람이 되돌린 것
         else:
             review.remove_domain(CANDIDATE_LABEL, r.domain)
+        if a.kind != COMMUNITY:
+            _drop_auto_community(community, r.domain)
         update_notes(candidates, {r.domain: _note_for(r, today)})   # 행마다 즉시 기록(재실행 안전)
     return counts
+
+
+def _drop_auto_community(community: Path, domain: str) -> None:
+    """커뮤니티가 아니라는 판정이면 자동 등록(source=auto:)된 커뮤니티 행을 되돌린다. 사람이 넣은 행은 건드리지 않는다."""
+    if any(registrable_domain(c["url"]) == domain and c["source"].startswith("auto:") for c in read_rows(community)):
+        remove_domain(community, domain)
 
 
 def _note_for(r: ReviewRow, today: str) -> str:

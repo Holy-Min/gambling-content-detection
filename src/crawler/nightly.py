@@ -154,7 +154,9 @@ def keywords_to_record(tally: SearchTally) -> list[str]:
 
 
 def _cell(text: str, limit: int = 40) -> str:
-    t = " ".join((text or "").split()).replace("|", "\\|")
+    t = " ".join((text or "").split())
+    for ch, rep in (("|", "\\|"), ("<", "&lt;"), (">", "&gt;"), ("`", "\\`")):
+        t = t.replace(ch, rep)
     return t if len(t) <= limit else t[:limit - 1] + "…"
 
 
