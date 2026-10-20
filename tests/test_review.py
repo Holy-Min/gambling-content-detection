@@ -47,3 +47,19 @@ def test_build_row_and_csv_roundtrip(tmp_path):
 def test_signals_malformed_url_does_not_raise():
     assert signals("x.com", [row(0, url="http://[bad")]) == []
     assert signals("x.com", [row(0, final_url="http://[bad")]) == []
+
+
+def test_write_review_csv_merge_keeps_verdicts_and_pending_rows(tmp_path):
+    alive_a = tmp_path / "a"; alive_a.mkdir()
+    p = tmp_path / "review.csv"
+    write_review_csv(p, [ReviewRow(domain="a.com", url="https://a.com/", title="old", status="ok", verdict="gambling", note="내 메모", review_dir=str(alive_a)),
+                         ReviewRow(domain="b.com", url="https://b.com/", title="b", status="ok", verdict="exclude", review_dir=str(tmp_path / "gone"))])
+    new = [ReviewRow(domain="a.com", url="https://a.com/", title="new", status="ok", suggested="gambling", review_dir=str(alive_a)),
+           ReviewRow(domain="c.com", url="https://c.com/", title="c", status="ok")]
+    write_review_csv(p, new, merge=True)
+    got = read_review_csv(p)
+    assert [r.domain for r in got] == ["a.com", "c.com"]
+    assert got[0].verdict == "gambling" and got[0].note == "내 메모" and got[0].title == "new" and got[0].suggested == "gambling"
+    assert got[1].verdict == ""
+    write_review_csv(p, [new[1]])   # merge=False 는 덮어쓴다
+    assert [r.domain for r in read_review_csv(p)] == ["c.com"]

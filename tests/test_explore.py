@@ -65,3 +65,17 @@ async def test_run_explore_budget_already_spent_skips_capture_but_writes_review(
     assert res.timed_out is True and res.capture_summary["skipped_deadline"] == 1 and res.capture_summary["ok"] == 0
     assert res.precaptured == 0 and res.review_rows == [] and (out / "review.csv").exists()
     assert read_rows(sd / "candidates.csv")[0]["note"] == "unverified"   # 마감에 못 간 후보는 다음 밤에 다시 고른다
+
+
+async def test_run_explore_merges_into_existing_review_csv(site, tmp_path):
+    from crawler.review import ReviewRow, read_review_csv, write_review_csv
+    settings = fast_settings(tmp_path)
+    sd = make_seeds(tmp_path, [cand(site + "/", source="search:토토사이트")])
+    out = tmp_path / "out" / "d"; out.mkdir(parents=True)
+    keep = tmp_path / "pending"; keep.mkdir()
+    write_review_csv(out / "review.csv", [ReviewRow(domain="ext.example", url="https://ext.example/", title="t", status="ok",
+                                                    verdict="exclude", review_dir=str(keep))])
+    res = await run_explore(settings, seeds_dir=sd, out_dir=out, today="2026-10-20")
+    got = read_review_csv(out / "review.csv")
+    assert [r.domain for r in got] == ["ext.example", res.review_rows[0].domain]
+    assert got[0].verdict == "exclude"

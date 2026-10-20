@@ -111,7 +111,7 @@ async def run_explore(settings: Settings, *, seeds_dir: Path, out_dir: Path, tod
     res.precaptured = len(res.review_rows)
     res.auto_communities = register_communities(res.review_rows, seeds_dir / "community_lists.csv", today, settings.nightly_max_auto_communities)
     res.review_csv = out_dir / "review.csv"
-    write_review_csv(res.review_csv, res.review_rows)
+    write_review_csv(res.review_csv, res.review_rows, merge=True)
     update_notes(candidates_csv, {r.domain: f"review: {today}" for r in res.review_rows})
     res.keywords_added, res.keywords_retired = expand_keywords(
         settings, seeds_dir, Store(settings.out_root, settings.salt), [r.title for r in res.review_rows if r.status == "ok"])

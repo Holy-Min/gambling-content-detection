@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import csv
+import io
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
 from .config import LABELS
+from .fsutil import atomic_write_text
 from .store import Store
 
 REF_KEYS = frozenset({"code", "ref", "aff", "partner", "invite", "recommend", "rec", "추천"})
@@ -102,14 +104,27 @@ def build_row(domain: str, url: str, rows: list[dict], review_dir: str) -> Revie
                      signals=sig, suggested=suggest(sig), review_dir=review_dir)
 
 
-def write_review_csv(path: Path, rows: list[ReviewRow]) -> None:
+def write_review_csv(path: Path, rows: list[ReviewRow], merge: bool = False) -> None:
+    """review.csv 를 쓴다. merge=True 이고 파일이 있으면 같은 날짜 재실행으로 사람의 판정이 사라지지 않게 병합한다:
+    review_dir 이 아직 있고 새 행에 없는 기존 도메인은 유지, 겹치는 도메인은 새 행에 기존 verdict·note 를 보존, 순서는 기존 먼저·새 행 뒤."""
     path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f, lineterminator="\n")
-        w.writerow(REVIEW_HEADER)
-        for r in rows:
-            w.writerow([r.domain, r.url, r.title, r.status, "|".join(r.signals), r.suggested, r.verdict, r.note, r.review_dir])
+    if merge and path.exists():
+        new_by = {r.domain: r for r in rows}
+        merged: list[ReviewRow] = []
+        for old in read_review_csv(path):
+            hit = new_by.pop(old.domain, None)
+            if hit is not None:
+                hit.verdict, hit.note = old.verdict or hit.verdict, old.note or hit.note
+                merged.append(hit)
+            elif old.review_dir and Path(old.review_dir).exists():
+                merged.append(old)
+        rows = merged + [r for r in rows if r.domain in new_by]
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(REVIEW_HEADER)
+    for r in rows:
+        w.writerow([r.domain, r.url, r.title, r.status, "|".join(r.signals), r.suggested, r.verdict, r.note, r.review_dir])
+    atomic_write_text(path, buf.getvalue())
 
 
 def read_review_csv(path: Path) -> list[ReviewRow]:
