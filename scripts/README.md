@@ -6,7 +6,7 @@
 ```bash
 cp scripts/launchd/com.gambling-crawler.nightly.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.gambling-crawler.nightly.plist
-launchctl kickstart -k gui/$(id -u)/com.gambling-crawler.nightly   # 지금 한 번 실행(검증용)
+launchctl kickstart -k gui/$(id -u)/com.gambling-crawler.nightly   # 실제 전체 실행(예산까지 돌고, 진행 중인 실행을 죽임) — 검증은 먼저 `nightly --dry-run`
 launchctl bootout gui/$(id -u)/com.gambling-crawler.nightly         # 해제
 ```
 전제: 전원 연결, 잠자기 방지(또는 `sudo pmset repeat wake MTWRFSU 04:25:00`), 가정용 ISP(차단은 `blocked_kr` 로 기록되는 것이 정상). 회사 앱 루프(02:00, 최대 150분)와 겹치지 않게 04:30.

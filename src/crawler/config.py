@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping
@@ -69,7 +70,8 @@ def load_settings(out: str | None = None, env: Mapping[str, str] | None = None,
     merged = {**read_env_file(env_file), **env}   # 실제 환경변수가 .env보다 우선
     salt = merged.get("CRAWLER_SALT", "").strip()
     if not salt:
-        raise SystemExit("CRAWLER_SALT가 없습니다. .env(.env.example 참고) 또는 환경변수로 지정하세요.")
+        print("CRAWLER_SALT가 없습니다. .env(.env.example 참고) 또는 환경변수로 지정하세요.", file=sys.stderr)
+        raise SystemExit(2)
     root = Path(out) if out else Path(merged["CRAWLER_OUT"]) if merged.get("CRAWLER_OUT") else DEFAULT_OUT
     clean = {k: v for k, v in overrides.items() if v is not None}
     if "review_root" not in clean and merged.get("CRAWLER_REVIEW"):

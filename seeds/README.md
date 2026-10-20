@@ -21,6 +21,7 @@
 4. `python -m crawler capture --label embedded_banner --seeds seeds/embedded_banner.csv --emit-candidates`
 5. `python -m crawler capture --label gambling --seeds seeds/gambling.csv`
 6. `python -m crawler capture --label hard_negative --seeds seeds/hard_negative.csv` (robots.txt·5초 간격 자동 적용), normal도 같은 방식
+   - 수동 `capture` 도 `--recapture-days`(기본 7)가 지난 도메인은 다시 열어 `duplicate` 행을 남길 수 있다. 예전처럼 새 시드만 돌리려면 `--recapture-days 99999`.
 7. `python -m crawler stats`
 
 ## 야간 루프가 바꾸는 파일

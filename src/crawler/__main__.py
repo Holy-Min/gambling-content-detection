@@ -119,9 +119,17 @@ def main(argv: list[str] | None = None) -> int:
             release_lock(lock)
     if ns.command == "explore":
         from .explore import run_explore
+        from .nightly import acquire_lock, release_lock
         settings = load_settings(nightly_candidate_pages=ns.per_domain)
         today = ns.date or today_kst()
-        res = asyncio.run(run_explore(settings, seeds_dir=SEEDS_DIR, out_dir=Path(ns.out_dir) / today, today=today, max_candidates=ns.max_candidates))
+        lock = Path(ns.out_dir) / ".lock"   # nightly 와 같은 잠금: 야간 실행 중 수동 explore 가 같은 파일을 쓰지 않게
+        if not acquire_lock(lock):
+            print(f"이미 실행 중입니다: {lock}")
+            return 2
+        try:
+            res = asyncio.run(run_explore(settings, seeds_dir=SEEDS_DIR, out_dir=Path(ns.out_dir) / today, today=today, max_candidates=ns.max_candidates))
+        finally:
+            release_lock(lock)
         print(json.dumps({"precaptured": res.precaptured, "auto_communities": res.auto_communities, "keywords_added": res.keywords_added,
                           "keywords_retired": res.keywords_retired, "review_csv": str(res.review_csv), **res.capture_summary}, ensure_ascii=False, indent=2))
         return 0

@@ -12,8 +12,9 @@ def test_read_env_file_parses_key_values_and_ignores_comments(tmp_path):
 
 
 def test_load_settings_requires_salt(tmp_path):
-    with pytest.raises(SystemExit):
+    with pytest.raises(SystemExit) as e:
         load_settings(env={}, env_file=tmp_path / "none")
+    assert e.value.code == 2
 
 
 def test_load_settings_precedence_cli_over_env_over_default(tmp_path):
