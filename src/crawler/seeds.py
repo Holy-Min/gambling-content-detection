@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import io
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Iterable
 
 from .config import LABELS
 from .domains import registrable_domain
+from .fsutil import atomic_write_text
 
 HEADER = ["url", "source", "added_at", "note"]
 
@@ -108,12 +110,11 @@ def read_rows(path: Path) -> list[dict[str, str]]:
 
 def write_rows(path: Path, rows: list[dict[str, str]]) -> None:
     """HEADER 순서로 파일을 덮어쓴다."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f, lineterminator="\n")
-        w.writerow(HEADER)
-        w.writerows([[r.get(k, "") for k in HEADER] for r in rows])
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(HEADER)
+    w.writerows([[r.get(k, "") for k in HEADER] for r in rows])
+    atomic_write_text(Path(path), buf.getvalue())
 
 
 def update_notes(path: Path, notes: dict[str, str]) -> int:
@@ -183,9 +184,7 @@ def read_keywords(path: Path) -> list[str]:
 
 def write_keywords(path: Path, keywords: list[str], header: str) -> None:
     """헤더 한 줄과 키워드를 한 줄씩 덮어쓴다."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join([header + "\n"] + [k + "\n" for k in keywords]), encoding="utf-8")
+    atomic_write_text(Path(path), "".join([header + "\n"] + [k + "\n" for k in keywords]))
 
 
 def all_seed_files(seeds_dir: Path) -> list[Path]:

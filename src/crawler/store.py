@@ -9,6 +9,7 @@ from pathlib import Path
 from PIL import Image
 
 from .domains import domain_hash, normalize_url
+from .fsutil import atomic_write_text
 
 KST = timezone(timedelta(hours=9))
 
@@ -125,10 +126,7 @@ class Store:
         return last["status"] == "blocked_kr" and _within(datetime.fromisoformat(last["captured_at"]), now, days)
 
     def rewrite_index(self) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        with self.index_path.open("w", encoding="utf-8") as f:
-            for m in self._index:
-                f.write(json.dumps(m, ensure_ascii=False) + "\n")
+        atomic_write_text(self.index_path, "".join(json.dumps(m, ensure_ascii=False) + "\n" for m in self._index))
 
     def remove_domain(self, label: str, domain: str, delete_files: bool = True) -> int:
         """색인에서 (label, domain) 행을 지우고(파일 다시 씀) 폴더를 삭제한다. 지운 행 수."""

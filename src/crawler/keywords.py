@@ -7,6 +7,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
+from .fsutil import atomic_write_text
+
 SUFFIXES = ("사이트", "놀이터", "검증", "카지노", "토토", "슬롯", "바카라", "파워볼", "홀덤", "릴게임")
 AUTO_HEADER = "# 자동 키워드 — nightly 가 관리. 손으로 고치려면 keywords.txt 를 쓸 것"
 _SPLIT = re.compile(r"[\s|\-–—·,.:;!?()\[\]【】\"'/\\<>]+")
@@ -55,9 +57,7 @@ def load_state(path: Path) -> dict:
 
 
 def save_state(path: Path, state: dict) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_text(Path(path), json.dumps(state, ensure_ascii=False, indent=1, sort_keys=True) + "\n")
 
 
 def pick_auto_keywords(state: dict, auto_keywords: list[str], n: int) -> list[str]:
