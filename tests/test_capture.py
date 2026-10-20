@@ -58,3 +58,38 @@ def test_external_domains_excludes_same_domain_platform_and_dups_with_limit():
              "javascript:void(0)", "https://elsewhere.net/", "mailto:a@b.c"] + [f"https://d{i}.com/" for i in range(30)]
     got = external_domains(hrefs, "site.com")
     assert got[:2] == ["toto-partner.com", "elsewhere.net"] and len(got) == 20
+
+
+def test_robots_timeout_allows_and_403_disallows(monkeypatch):
+    import socket
+    import time
+    import urllib.error
+    import urllib.request
+    from crawler.capture import _robots, robots_allows
+
+    seen: dict = {}
+
+    def slow(*a, **k):
+        seen.update(k)
+        raise socket.timeout("timed out")
+
+    _robots.cache_clear()
+    monkeypatch.setattr(urllib.request, "urlopen", slow)
+    t0 = time.monotonic()
+    assert robots_allows("https://slow.example/x") is True and time.monotonic() - t0 < 2
+    assert seen.get("timeout") == 10   # 응답 없는 호스트가 루프를 멈추지 않게 명시적 타임아웃
+
+    def forbidden(*a, **k):
+        raise urllib.error.HTTPError("https://deny.example/robots.txt", 403, "Forbidden", {}, None)
+
+    _robots.cache_clear()
+    monkeypatch.setattr(urllib.request, "urlopen", forbidden)
+    assert robots_allows("https://deny.example/x") is False
+
+    def missing(*a, **k):
+        raise urllib.error.HTTPError("https://nf.example/robots.txt", 404, "Not Found", {}, None)
+
+    _robots.cache_clear()
+    monkeypatch.setattr(urllib.request, "urlopen", missing)
+    assert robots_allows("https://nf.example/x") is True
+    _robots.cache_clear()

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import time
+import urllib.error
+import urllib.request
 import urllib.robotparser
 from collections import defaultdict
 from dataclasses import dataclass
@@ -152,14 +154,27 @@ def menu_targets(items: list[dict], page_domain: str) -> list[MenuTarget]:
     return sorted(by_text.values(), key=lambda t: 0 if t.kind == "deposit" else 1)
 
 
+ROBOTS_TIMEOUT_S = 10
+
+
 @lru_cache(maxsize=1024)
 def _robots(host_url: str) -> urllib.robotparser.RobotFileParser | None:
+    """robots.txt 를 10초 타임아웃으로 직접 읽는다. 401/403 은 전부 금지(RobotFileParser.read 와 동일), 그 밖의 실패는 허용(None)."""
     rp = urllib.robotparser.RobotFileParser()
-    rp.set_url(host_url.rstrip("/") + "/robots.txt")
+    url = host_url.rstrip("/") + "/robots.txt"
+    rp.set_url(url)
     try:
-        rp.read()
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=ROBOTS_TIMEOUT_S) as resp:
+            text = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            rp.disallow_all = True
+            return rp
+        return None
     except Exception:
         return None
+    rp.parse(text.splitlines())
     return rp
 
 
@@ -395,7 +410,7 @@ async def capture_domain(context: BrowserContext, seed: Seed, *, label: str, set
             url = queue.pop(0)
             if store.seen_recently(url, days=settings.recapture_days) and not (settings.refresh and idx == 0):
                 continue  # --refresh: 홈은 다시 열어 내부 링크(충전·가입 페이지)를 새로 모은다
-            if label in settings.robots_labels and not robots_allows(url):
+            if label in settings.robots_labels and not await asyncio.to_thread(robots_allows, url):
                 meta = _empty_meta(label=label, seed_source=seed.source, url=url, domain=domain, store=store, idx=idx, settings=settings)
                 meta["status"] = "robots_disallow"
                 store.record(meta); metas.append(meta); idx += 1
