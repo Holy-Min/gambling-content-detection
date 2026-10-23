@@ -2,6 +2,22 @@
  "bot_check_date": null,
  "keywords": {
   "69카지노": {
+   "added_total": 6,
+   "last_run": "2026-10-21",
+   "origin": "auto",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "8월｜바카라": {
+   "added_total": 0,
+   "last_run": null,
+   "origin": "auto",
+   "retired": false,
+   "runs": 0,
+   "zero_streak": 0
+  },
+  "검증사이트": {
    "added_total": 0,
    "last_run": null,
    "origin": "auto",
@@ -10,22 +26,94 @@
    "zero_streak": 0
   },
   "공식 사이트": {
-   "added_total": 0,
-   "last_run": null,
+   "added_total": 9,
+   "last_run": "2026-10-21",
    "origin": "auto",
    "retired": false,
-   "runs": 0,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "먹튀검증": {
+   "added_total": 2,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "메이저사이트": {
+   "added_total": 2,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "바카라사이트": {
+   "added_total": 2,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "스포츠토토 사이트 추천": {
+   "added_total": 1,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
    "zero_streak": 0
   },
   "스피드 바카라": {
-   "added_total": 0,
-   "last_run": null,
+   "added_total": 8,
+   "last_run": "2026-10-21",
    "origin": "auto",
    "retired": false,
-   "runs": 0,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "슬롯사이트": {
+   "added_total": 3,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "안전놀이터": {
+   "added_total": 1,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
    "zero_streak": 0
   },
   "온라인 카지노": {
+   "added_total": 1,
+   "last_run": "2026-10-21",
+   "origin": "auto",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "온라인카지노": {
+   "added_total": 1,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "월식카지노": {
+   "added_total": 8,
+   "last_run": "2026-10-21",
+   "origin": "auto",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "일반 바카라": {
    "added_total": 0,
    "last_run": null,
    "origin": "auto",
@@ -33,13 +121,45 @@
    "runs": 0,
    "zero_streak": 0
   },
-  "월식카지노": {
+  "최고의 카지노사이트": {
    "added_total": 0,
    "last_run": null,
    "origin": "auto",
    "retired": false,
    "runs": 0,
    "zero_streak": 0
+  },
+  "카지노사이트": {
+   "added_total": 0,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 1
+  },
+  "카지노사이트 69카지노": {
+   "added_total": 0,
+   "last_run": null,
+   "origin": "auto",
+   "retired": false,
+   "runs": 0,
+   "zero_streak": 0
+  },
+  "토토사이트": {
+   "added_total": 1,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "파워볼사이트": {
+   "added_total": 0,
+   "last_run": "2026-10-21",
+   "origin": "manual",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 1
   }
  }
 }
