@@ -44,6 +44,7 @@ class Settings:
     delays: dict[str, float] = field(default_factory=lambda: {
         "gambling": 3.0, "embedded_banner": 3.0, "hard_negative": 5.0, "normal": 5.0, "candidate": 5.0})
     robots_labels: frozenset[str] = frozenset({"hard_negative", "normal", "candidate"})
+    overlay_labels: frozenset[str] = frozenset({"embedded_banner"})   # 팝업 오버레이를 숨기고 찍는 라벨 — 배너 크롭이 팝업에 가려지지 않게
 
     def __post_init__(self) -> None:
         self.out_root = Path(self.out_root)

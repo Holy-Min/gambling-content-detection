@@ -13,14 +13,15 @@ def test_from_js_maps_dicts():
 def test_size_and_aspect_rules():
     kept = filter_candidates([
         c(300, 100),            # ok
+        c(189, 49),             # ok (2열 모바일 그리드, 면적 9261)
         c(140, 100),            # 너비 < 150
         c(300, 30),             # 높이 < 40
-        c(150, 79),             # 면적 < 12000
+        c(150, 59),             # 면적 8850 < 9000
         c(1000, 50),            # 비율 20 > 8
         c(60, 400),             # 비율 0.15 < 0.2 (너비도 미달)
         c(300, 100, visible=False),
     ], page_domain="site.com", label="gambling")
-    assert kept == [c(300, 100)]
+    assert kept == [c(300, 100), c(189, 49)]
 
 
 def test_iou_dedup_keeps_larger_and_sorts_by_area():
@@ -35,6 +36,13 @@ def test_iou_dedup_keeps_larger_and_sorts_by_area():
 def test_max_n():
     cands = [c(300, 100, y=i * 200) for i in range(20)]
     assert len(filter_candidates(cands, "site.com", "gambling", max_n=12)) == 12
+
+
+def test_max_n_default_depends_on_label():
+    cands = [c(300, 100, y=i * 200, href=f"https://toto{i}.com/") for i in range(60)]
+    assert len(filter_candidates(cands, "site.com", "embedded_banner")) == 40
+    assert len(filter_candidates(cands, "site.com", "gambling")) == 12
+    assert len(filter_candidates(cands, "site.com", "embedded_banner", max_n=5)) == 5
 
 
 def test_embedded_banner_keeps_only_external_hrefs():

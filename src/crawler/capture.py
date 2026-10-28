@@ -31,6 +31,32 @@ PAGE_KINDS = ("home", "deposit", "register", "login", "other")
 STATUSES = ("ok", "blocked_kr", "challenge", "error", "duplicate", "robots_disallow")
 RESET_MARKERS = ("ERR_CONNECTION_RESET", "ERR_CONNECTION_CLOSED", "ERR_SSL_PROTOCOL_ERROR")
 
+# 모달 스크림(반투명·블러 fixed 전체화면)을 숨겨 배너 크롭이 팝업에 가려지지 않게 한다. 숨긴 개수 반환.
+HIDE_OVERLAYS_JS = """() => {
+  const vw = innerWidth, vh = innerHeight; let n = 0;
+  const walk = (el) => {
+    for (const c of el.children) {
+      const cs = getComputedStyle(c);
+      if (cs.display === 'none') continue;
+      if (cs.position === 'fixed' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0) {
+        const r = c.getBoundingClientRect();
+        const iw = Math.min(r.right, vw) - Math.max(r.left, 0), ih = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+        const m = cs.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
+        const a = m ? (m[1].split(/[,/ ]+/).filter(Boolean)[3]) : undefined;
+        const alpha = a === undefined ? 1 : parseFloat(a);
+        const scrim = (cs.backdropFilter && cs.backdropFilter !== 'none') || (alpha > 0 && alpha < 1);
+        const shell = c.scrollHeight > c.clientHeight + 50 && /auto|scroll/.test(cs.overflowY);
+        if (iw > 0 && ih > 0 && iw * ih >= 0.5 * vw * vh && scrim && !shell) {
+          c.style.setProperty('display', 'none', 'important'); n++; continue;
+        }
+      }
+      walk(c);
+    }
+  };
+  walk(document.body);
+  return n;
+}"""
+
 
 def _strip_fragment(url: str) -> str:
     p = urlsplit(url)
@@ -193,7 +219,7 @@ def _empty_meta(*, label: str, seed_source: str, url: str, domain: str, store: S
             "url_norm": normalize_url(url), "final_url": None, "domain": domain, "domain_hash": dhash,
             "captured_at": at.isoformat(), "status": "error",
             "viewport": {"width": settings.viewport_width, "height": settings.viewport_height, "dpr": settings.dpr},
-            "title": None, "page_kind": None, "via": None, "full_path": None, "page_height": None, "image_size": None, "phash": None, "banners": [], "text_excerpt": None, "ext_domains": [], "error": None}
+            "title": None, "page_kind": None, "via": None, "full_path": None, "page_height": None, "image_size": None, "phash": None, "banners": [], "text_excerpt": None, "ext_domains": [], "overlays_hidden": None, "error": None}
 
 
 async def _scroll_through(page: Page, settings: Settings) -> int:
@@ -270,6 +296,13 @@ async def capture_page(page: Page, url: str, *, label: str, seed_source: str, se
             meta["page_kind"] = kind_hint   # 클릭한 메뉴 글자(충전·가입)로 보정
         ddir.mkdir(parents=True, exist_ok=True)
         full = ddir / f"{stem}_full.png"
+        if label in settings.overlay_labels:
+            try:
+                meta["overlays_hidden"] = int(await page.evaluate(HIDE_OVERLAYS_JS))
+                if meta["overlays_hidden"]:
+                    await page.wait_for_timeout(300)
+            except Exception:
+                pass
         await page.screenshot(path=str(full), full_page=full_page)
         dpr = settings.dpr
         with Image.open(full) as im:

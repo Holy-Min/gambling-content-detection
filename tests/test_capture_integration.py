@@ -135,3 +135,37 @@ async def test_run_capture_far_deadline_changes_nothing(site, tmp_path):
     settings = fast_settings(tmp_path)
     summary = await run_capture(settings, [Seed(url=site + "/", source="test", added_at="2026-10-20")], label="gambling", deadline=time.monotonic() + 600)
     assert summary["ok"] == 2 and summary["skipped_deadline"] == 0 and summary["deadline_hit"] == 0
+
+
+async def test_webtoon_banners_without_anchor_are_extracted(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    cand = tmp_path / "candidates.csv"
+    await run_capture(settings, [Seed(url=site + "/webtoon.html", source="test", added_at="2026-10-28")], label="embedded_banner",
+                      emit_candidates=True, candidates_path=cand)
+    home = index_rows(settings.out_root)[0]
+    domains = {b["href_domain"] for b in home["banners"]}
+    assert {"toto-button.com", "toto-onclick.com", "toto-anchor.com"} <= domains
+    assert not any(b["href_domain"] == "127.0.0.1" for b in home["banners"])
+    text = cand.read_text(encoding="utf-8")
+    assert all(d in text for d in ("toto-button.com", "toto-onclick.com", "toto-anchor.com"))
+
+
+def _mean(path):
+    px = Image.open(path).convert("RGB").resize((1, 1), Image.BILINEAR).getpixel((0, 0))
+    return px
+
+
+async def test_overlay_hidden_for_embedded_banner_crop_is_the_banner(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    await run_capture(settings, [Seed(url=site + "/overlay.html", source="test", added_at="2026-10-28")], label="embedded_banner")
+    home = index_rows(settings.out_root)[0]
+    assert home["overlays_hidden"] == 1      # 스크림만 숨김, 불투명 헤더는 그대로
+    b = next(b for b in home["banners"] if b["href_domain"] == "toto-overlay.com")
+    r, g, bl = _mean(settings.out_root / b["path"])
+    assert r > 180 and g < 70 and bl < 70    # banner1.png = (220,30,30)
+
+
+async def test_overlay_untouched_for_other_labels(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    await run_capture(settings, [Seed(url=site + "/overlay.html", source="test", added_at="2026-10-28")], label="gambling")
+    assert index_rows(settings.out_root)[0]["overlays_hidden"] is None

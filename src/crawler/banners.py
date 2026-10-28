@@ -21,14 +21,35 @@ BANNER_JS = r"""() => {
       const m = /url\(["']?([^"')]+)["']?\)/.exec(cs.backgroundImage || '');
       src = m ? m[1] : null;
     }
+    let href = null;
     const a = el.closest('a[href]');
+    if (a) href = a.href;
+    else {
+      // 앵커가 없는 배너: data-* 속성 → onclick 안의 URL 순으로 찾는다(newtoki 등)
+      let v = null;
+      const d = el.closest('[data-banner-href],[data-href],[data-url],[data-link]');
+      if (d) {
+        for (const k of ['data-banner-href', 'data-href', 'data-url', 'data-link']) {
+          if (d.hasAttribute(k)) { v = d.getAttribute(k); break; }
+        }
+      } else {
+        const o = el.closest('[onclick*="http"]');
+        const m = o ? /https?:\/\/[^'"\s)]+/.exec(o.getAttribute('onclick') || '') : null;
+        if (m) v = m[0];
+      }
+      if (v) {
+        try { const u = new URL(v, location.href).href; if (/^https?:/.test(u)) href = u; } catch (e) {}
+      }
+    }
     out.push({ tag: el.tagName.toLowerCase(), x: r.left + window.scrollX, y: r.top + window.scrollY,
-               w: r.width, h: r.height, visible, src, href: a ? a.href : null });
+               w: r.width, h: r.height, visible, src, href });
   }
   return out;
 }"""
 
-MIN_W, MIN_H, MIN_AREA = 150, 40, 12_000
+# 모바일 2열 그리드(375×100 소재)는 ~189×49로 렌더되므로 면적 하한을 낮춘다
+MIN_W, MIN_H, MIN_AREA = 150, 40, 9_000
+MAX_BANNERS, MAX_BANNERS_EMBEDDED = 12, 40
 MIN_ASPECT, MAX_ASPECT = 0.2, 8.0
 IOU_DUP = 0.8
 
@@ -74,7 +95,9 @@ def _passes_size(c: Candidate) -> bool:
     return MIN_ASPECT <= aspect <= MAX_ASPECT
 
 
-def filter_candidates(cands: list[Candidate], page_domain: str, label: str, max_n: int = 12) -> list[Candidate]:
+def filter_candidates(cands: list[Candidate], page_domain: str, label: str, max_n: int | None = None) -> list[Candidate]:
+    if max_n is None:
+        max_n = MAX_BANNERS_EMBEDDED if label == "embedded_banner" else MAX_BANNERS
     pool = [c for c in cands if _passes_size(c)]
     if label == "embedded_banner":
         pool = [c for c in pool if c.href and href_domain(c) != page_domain]
