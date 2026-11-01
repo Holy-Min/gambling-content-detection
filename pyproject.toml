@@ -16,6 +16,7 @@ crawler = "crawler.__main__:main"
 where = ["src"]
 
 [tool.pytest.ini_options]
+tdd_guard_project_root = "/Users/seongmin/gambling-content-detection"
 pythonpath = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
