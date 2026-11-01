@@ -28,3 +28,6 @@ out/
 
 # Python packaging
 *.egg-info/
+
+# Claude Code / TDD Guard local data
+.claude/
