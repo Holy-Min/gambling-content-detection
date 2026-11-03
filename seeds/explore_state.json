@@ -33,6 +33,14 @@
    "runs": 1,
    "zero_streak": 0
   },
+  "게임 슬롯": {
+   "added_total": 0,
+   "last_run": null,
+   "origin": "auto",
+   "retired": false,
+   "runs": 0,
+   "zero_streak": 0
+  },
   "공식 사이트": {
    "added_total": 9,
    "last_run": "2026-10-21",
@@ -42,6 +50,14 @@
    "zero_streak": 0
   },
   "라바 카지노": {
+   "added_total": 0,
+   "last_run": null,
+   "origin": "auto",
+   "retired": false,
+   "runs": 0,
+   "zero_streak": 0
+  },
+  "라이브 카지노": {
    "added_total": 0,
    "last_run": null,
    "origin": "auto",
@@ -106,6 +122,22 @@
    "zero_streak": 0
   },
   "베팅사이트": {
+   "added_total": 0,
+   "last_run": null,
+   "origin": "auto",
+   "retired": false,
+   "runs": 0,
+   "zero_streak": 0
+  },
+  "베팅사이트 안전놀이터": {
+   "added_total": 0,
+   "last_run": null,
+   "origin": "auto",
+   "retired": false,
+   "runs": 0,
+   "zero_streak": 0
+  },
+  "보증카지노": {
    "added_total": 0,
    "last_run": null,
    "origin": "auto",
@@ -280,6 +312,14 @@
    "retired": false,
    "runs": 2,
    "zero_streak": 2
+  },
+  "회원가입 쇼부카지노": {
+   "added_total": 0,
+   "last_run": null,
+   "origin": "auto",
+   "retired": false,
+   "runs": 0,
+   "zero_streak": 0
   }
  }
 }
