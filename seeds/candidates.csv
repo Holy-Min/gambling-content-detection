@@ -566,20 +566,20 @@ https://www.gamebridge.kr/,search-normal:게임 아이템 상점,2026-11-11,→ 
 https://www.barotem.com/,search-normal:게임 아이템 상점,2026-11-11,→ hard_negative.csv (review 2026-11-11)
 https://summonerswar-shop.com2us.com/,search-normal:게임 아이템 상점,2026-11-11,→ hard_negative.csv (review 2026-11-11)
 https://store.steampowered.com/points/shop/?l=koreana,search-normal:게임 아이템 상점,2026-11-11,review: 2026-11-11
-https://kupon.kr/games,search-normal:모바일 게임 쿠폰,2026-11-11,unverified
-https://coupondungeon.kr/,search-normal:모바일 게임 쿠폰,2026-11-11,unverified
-https://m.hungryapp.co.kr/,search-normal:모바일 게임 쿠폰,2026-11-11,unverified
-https://www.lv1arcade.com/coupons,search-normal:모바일 게임 쿠폰,2026-11-11,unverified
-https://ssalmuk.com/game-event/coupons,search-normal:모바일 게임 쿠폰,2026-11-11,unverified
-https://www.mokudeng.com/,search-normal:모바일 게임 쿠폰,2026-11-11,unverified
-https://gcouponplay.com/coupon-alerts/,search-normal:모바일 게임 쿠폰,2026-11-11,unverified
-https://www.culturegift.co.kr/,search-normal:문화상품권 충전,2026-11-11,unverified
-https://www.cultureland.co.kr/charge/main.do,search-normal:문화상품권 충전,2026-11-11,unverified
-https://www.giftplay.co.kr/charge,search-normal:문화상품권 충전,2026-11-11,unverified
-https://www.booknlife.com/,search-normal:문화상품권 충전,2026-11-11,unverified
-https://arca.live/b/charging,search-normal:포인트 충전소,2026-11-11,unverified
-https://help.postype.com/hc/ko/articles/29933362522649-%ED%8F%AC%EC%9D%B8%ED%8A%B8-%EB%AC%B4%EB%A3%8C-%EC%B6%A9%EC%A0%84%EC%86%8C,search-normal:포인트 충전소,2026-11-11,unverified
-https://www.payco.com/point/in.nhn,search-normal:포인트 충전소,2026-11-11,unverified
-https://skelectlink.co.kr/,search-normal:포인트 충전소,2026-11-11,unverified
-https://nhcharge.nonghyup.com/,search-normal:포인트 충전소,2026-11-11,unverified
-https://evmodu.kr/,search-normal:포인트 충전소,2026-11-11,unverified
+https://kupon.kr/games,search-normal:모바일 게임 쿠폰,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://coupondungeon.kr/,search-normal:모바일 게임 쿠폰,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://m.hungryapp.co.kr/,search-normal:모바일 게임 쿠폰,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://www.lv1arcade.com/coupons,search-normal:모바일 게임 쿠폰,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://ssalmuk.com/game-event/coupons,search-normal:모바일 게임 쿠폰,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://www.mokudeng.com/,search-normal:모바일 게임 쿠폰,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://gcouponplay.com/coupon-alerts/,search-normal:모바일 게임 쿠폰,2026-11-11,review: 2026-11-11
+https://www.culturegift.co.kr/,search-normal:문화상품권 충전,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://www.cultureland.co.kr/charge/main.do,search-normal:문화상품권 충전,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://www.giftplay.co.kr/charge,search-normal:문화상품권 충전,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://www.booknlife.com/,search-normal:문화상품권 충전,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://arca.live/b/charging,search-normal:포인트 충전소,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://help.postype.com/hc/ko/articles/29933362522649-%ED%8F%AC%EC%9D%B8%ED%8A%B8-%EB%AC%B4%EB%A3%8C-%EC%B6%A9%EC%A0%84%EC%86%8C,search-normal:포인트 충전소,2026-11-11,excluded: 도움말 문서
+https://www.payco.com/point/in.nhn,search-normal:포인트 충전소,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://skelectlink.co.kr/,search-normal:포인트 충전소,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://nhcharge.nonghyup.com/,search-normal:포인트 충전소,2026-11-11,→ hard_negative.csv (review 2026-11-11)
+https://evmodu.kr/,search-normal:포인트 충전소,2026-11-11,→ hard_negative.csv (review 2026-11-11)
