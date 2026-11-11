@@ -41,6 +41,22 @@
    "runs": 0,
    "zero_streak": 0
   },
+  "게임 아이템 상점": {
+   "added_total": 8,
+   "last_run": "2026-11-11",
+   "origin": "normal",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "게임 캐시 충전": {
+   "added_total": 7,
+   "last_run": "2026-11-11",
+   "origin": "normal",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
+  },
   "공식 사이트": {
    "added_total": 9,
    "last_run": "2026-10-21",
@@ -50,11 +66,11 @@
    "zero_streak": 0
   },
   "라바 카지노": {
-   "added_total": 0,
-   "last_run": null,
+   "added_total": 6,
+   "last_run": "2026-11-11",
    "origin": "auto",
    "retired": false,
-   "runs": 0,
+   "runs": 1,
    "zero_streak": 0
   },
   "라이브 카지노": {
@@ -70,8 +86,8 @@
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
-   "zero_streak": 0
+   "runs": 5,
+   "zero_streak": 1
   },
   "먹튀사이트": {
    "added_total": 2,
@@ -94,15 +110,31 @@
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
-   "zero_streak": 2
+   "runs": 5,
+   "zero_streak": 3
+  },
+  "모바일 게임 쿠폰": {
+   "added_total": 7,
+   "last_run": "2026-11-11",
+   "origin": "normal",
+   "retired": false,
+   "runs": 1,
+   "zero_streak": 0
   },
   "문의 월식카지노": {
-   "added_total": 0,
-   "last_run": null,
+   "added_total": 4,
+   "last_run": "2026-11-11",
    "origin": "auto",
    "retired": false,
-   "runs": 0,
+   "runs": 1,
+   "zero_streak": 0
+  },
+  "문화상품권 충전": {
+   "added_total": 4,
+   "last_run": "2026-11-11",
+   "origin": "normal",
+   "retired": false,
+   "runs": 1,
    "zero_streak": 0
   },
   "바카라 사이트": {
@@ -118,8 +150,8 @@
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
-   "zero_streak": 0
+   "runs": 5,
+   "zero_streak": 1
   },
   "베팅사이트": {
    "added_total": 4,
@@ -158,8 +190,8 @@
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
-   "zero_streak": 3
+   "runs": 5,
+   "zero_streak": 4
   },
   "스피드 바카라": {
    "added_total": 8,
@@ -170,11 +202,11 @@
    "zero_streak": 0
   },
   "슬롯사이트": {
-   "added_total": 5,
+   "added_total": 7,
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
+   "runs": 5,
    "zero_streak": 0
   },
   "안전놀이터": {
@@ -182,8 +214,8 @@
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
-   "zero_streak": 1
+   "runs": 5,
+   "zero_streak": 2
   },
   "온라인 카지노": {
    "added_total": 1,
@@ -198,15 +230,15 @@
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
-   "zero_streak": 0
+   "runs": 5,
+   "zero_streak": 1
   },
   "온라인카지노 토토사이트": {
-   "added_total": 0,
-   "last_run": null,
+   "added_total": 1,
+   "last_run": "2026-11-11",
    "origin": "auto",
    "retired": false,
-   "runs": 0,
+   "runs": 1,
    "zero_streak": 0
   },
   "월식카지노": {
@@ -234,11 +266,11 @@
    "zero_streak": 0
   },
   "정보 슬롯사이트": {
-   "added_total": 0,
-   "last_run": null,
+   "added_total": 3,
+   "last_run": "2026-11-11",
    "origin": "auto",
    "retired": false,
-   "runs": 0,
+   "runs": 1,
    "zero_streak": 0
   },
   "최고의 카지노사이트": {
@@ -270,8 +302,8 @@
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
-   "zero_streak": 4
+   "runs": 5,
+   "zero_streak": 5
   },
   "카지노사이트 69카지노": {
    "added_total": 3,
@@ -294,23 +326,31 @@
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
-   "zero_streak": 0
+   "runs": 5,
+   "zero_streak": 1
   },
   "토토사이트 슬롯": {
    "added_total": 0,
-   "last_run": null,
+   "last_run": "2026-11-11",
    "origin": "auto",
    "retired": false,
-   "runs": 0,
-   "zero_streak": 0
+   "runs": 1,
+   "zero_streak": 1
   },
   "파워볼사이트": {
    "added_total": 1,
    "last_run": "2026-11-11",
    "origin": "manual",
    "retired": false,
-   "runs": 4,
+   "runs": 5,
+   "zero_streak": 1
+  },
+  "포인트 충전소": {
+   "added_total": 6,
+   "last_run": "2026-11-11",
+   "origin": "normal",
+   "retired": false,
+   "runs": 1,
    "zero_streak": 0
   },
   "회원가입 쇼부카지노": {
