@@ -79,3 +79,57 @@ async def test_run_explore_merges_into_existing_review_csv(site, tmp_path):
     got = read_review_csv(out / "review.csv")
     assert [r.domain for r in got] == ["ext.example", res.review_rows[0].domain]
     assert got[0].verdict == "exclude"
+
+
+def _sel_csv(tmp_path, normal, gambling):
+    rows = [cand(f"https://n{i}.com/", f"2026-10-{10 + i % 9:02d}", source="search-normal:x") for i in range(normal)]
+    rows += [cand(f"https://g{i}.com/", f"2026-10-{10 + i % 9:02d}", source="search:y") for i in range(gambling)]
+    return make_seeds(tmp_path, rows) / "candidates.csv"
+
+
+def _split(got):
+    return [s.source.startswith("search-normal:") for s in got]
+
+
+def test_select_candidates_quota(tmp_path):
+    got = select_candidates(_sel_csv(tmp_path, 20, 50), max_n=40, max_normal=15)
+    assert len(got) == 40 and _split(got) == [False] * 25 + [True] * 15
+
+
+def test_select_candidates_normal_short(tmp_path):
+    got = select_candidates(_sel_csv(tmp_path, 3, 50), max_n=40, max_normal=15)
+    assert _split(got) == [False] * 37 + [True] * 3
+
+
+def test_select_candidates_gambling_short(tmp_path):
+    got = select_candidates(_sel_csv(tmp_path, 20, 10), max_n=40, max_normal=15)
+    assert _split(got) == [False] * 10 + [True] * 15
+
+
+def test_select_candidates_no_normal_same_as_before(tmp_path):
+    csv_path = _sel_csv(tmp_path, 0, 30)
+    assert select_candidates(csv_path, 10, max_normal=15) == select_candidates(csv_path, 10, max_normal=0) == select_candidates(csv_path, 10)
+
+
+def test_select_candidates_default_ignores_track(tmp_path):
+    sd = make_seeds(tmp_path, [cand("https://g.com/", "2026-10-01"), cand("https://n.com/", "2026-10-09", source="search-normal:x"),
+                               cand("https://g2.com/", "2026-10-05")])
+    got = select_candidates(sd / "candidates.csv", max_n=3)
+    assert [s.url for s in got] == ["https://n.com/", "https://g2.com/", "https://g.com/"]
+
+
+def test_select_candidates_same_domain_both_tracks(tmp_path):
+    sd = make_seeds(tmp_path, [cand("https://both.com/a", "2026-10-09", source="search:y"),
+                               cand("https://www.both.com/b", "2026-10-01", source="search-normal:x"),
+                               cand("https://other.com/", "2026-10-02")])
+    got = select_candidates(sd / "candidates.csv", max_n=10, max_normal=5)
+    assert [(s.url, s.source) for s in got] == [("https://other.com/", "search:a"), ("https://www.both.com/b", "search-normal:x")]
+
+
+async def test_run_explore_excludes_normal_titles_from_keywords(site, tmp_path):
+    settings = fast_settings(tmp_path)
+    sd = make_seeds(tmp_path, [cand(site + "/", source="search-normal:게임 캐시 충전")])
+    res = await run_explore(settings, seeds_dir=sd, out_dir=tmp_path / "out" / "d", today="2026-10-20")
+    assert res.precaptured == 1 and res.precaptured_normal == 1
+    assert "normal_track" in res.review_rows[0].signals
+    assert res.keywords_added == [] and read_keywords(sd / "keywords_auto.txt") == []   # 같은 페이지가 도박 출처면 "도박 사이트" 가 들어간다

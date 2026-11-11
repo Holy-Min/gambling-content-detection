@@ -41,3 +41,81 @@ def test_community_tally_fields():
     from crawler.discover import CommunityTally
     t = CommunityTally(added=3, pages=2, timed_out=True)
     assert (t.added, t.pages, t.timed_out) == (3, 2, True)
+
+
+import asyncio
+import pytest
+from crawler import discover
+from tests.conftest import fast_settings
+from crawler.discover import is_normal_source, search_source
+from crawler.seeds import read_keywords
+
+
+def test_search_source_prefix():
+    assert search_source("토토사이트") == "search:토토사이트"
+    assert search_source("게임 캐시 충전", "normal") == "search-normal:게임 캐시 충전"
+    with pytest.raises(ValueError):
+        search_source("x", "etc")
+
+
+def test_is_normal_source():
+    assert is_normal_source("search-normal:a")
+    assert not any(is_normal_source(s) for s in ("search:a", "banner:x", "community:y", ""))
+
+
+class _FakePage:
+    async def goto(self, *a, **k): pass
+    async def wait_for_timeout(self, *a): pass
+    async def eval_on_selector_all(self, *a): return ["https://shop-a.com/x"]
+    def on(self, *a, **k): pass
+    def route(self, *a, **k): pass
+
+
+class _FakeContext:
+    async def new_page(self): return _FakePage()
+    async def close(self): pass
+
+
+class _FakeBrowser:
+    async def close(self): pass
+
+
+class _FakePW:
+    async def __aenter__(self): return self
+    async def __aexit__(self, *a): return False
+
+
+def _patch_fakes(monkeypatch, sources):
+    async def fake_open(pw): return _FakeBrowser()
+    async def fake_ctx(pw, b, s): return _FakeContext()
+    async def no_sleep(*a): pass
+    def fake_append(out, urls, source, known_domains):
+        sources.append(source)
+        return list(urls)
+    monkeypatch.setattr(discover, "async_playwright", lambda: _FakePW())
+    monkeypatch.setattr(discover, "open_browser", fake_open)
+    monkeypatch.setattr(discover, "new_context", fake_ctx)
+    monkeypatch.setattr(discover, "attach_page_guards", lambda page: None)
+    monkeypatch.setattr(discover, "append_candidates", fake_append)
+    monkeypatch.setattr(discover.asyncio, "sleep", no_sleep)
+
+
+@pytest.mark.parametrize("track,expected", [("normal", "search-normal:게임 캐시 충전"), ("gambling", "search:게임 캐시 충전")])
+def test_discover_search_keywords_source_by_track(monkeypatch, tmp_path, track, expected):
+    sources: list[str] = []
+    _patch_fakes(monkeypatch, sources)
+    asyncio.run(discover.discover_search_keywords(fast_settings(tmp_path), ["게임 캐시 충전"], tmp_path / "c.csv", set(), track=track))
+    assert sources == [expected]
+
+
+def test_discover_search_keywords_default_track_is_gambling(monkeypatch, tmp_path):
+    sources: list[str] = []
+    _patch_fakes(monkeypatch, sources)
+    asyncio.run(discover.discover_search_keywords(fast_settings(tmp_path), ["a"], tmp_path / "c.csv", set()))
+    assert sources == ["search:a"]
+
+
+def test_keywords_normal_file_has_15():
+    from pathlib import Path
+    kws = read_keywords(Path(__file__).resolve().parents[1] / "seeds" / "keywords_normal.txt")
+    assert len(kws) == 15 and kws[0] == "게임 캐시 충전" and kws[-1] == "경품 응모"

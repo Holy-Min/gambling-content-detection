@@ -74,3 +74,40 @@ def test_write_review_csv_neutralizes_formula_cells(tmp_path):
     assert got[0].title == "'=HYPERLINK(\"x\")" and got[0].note == "'+1"
     assert got[1].title == "'-2" and got[1].note == "'@x"
     assert got[2].title == "평범" and got[2].note == "메모"
+
+
+def test_signals_normal_track():
+    assert signals("a.com", [row(0, seed_source="search-normal:게임")]) == ["normal_track"]
+    assert signals("a.com", [row(0, seed_source="search:토토")]) == []
+    assert signals("a.com", [row(0), row(1, seed_source="search-normal:x")]) == ["normal_track"]
+
+
+def test_suggest_normal_track_hard_negative():
+    assert suggest(["normal_track"]) == "hard_negative"
+    assert suggest(["normal_track", "many_ext"]) == "hard_negative"
+
+
+def test_suggest_normal_track_with_address_signals_stays_gambling():
+    assert suggest(["normal_track", "ref_param", "numeric"]) == "gambling"
+    assert suggest(["normal_track", "many_ext", "verify_terms"]) == "community"
+
+
+def test_suggest_normal_track_deposit_page_is_hard_negative():
+    assert suggest(["deposit_page", "normal_track"]) == "hard_negative"
+    assert suggest(["deposit_page", "menu_terms", "normal_track"]) == "hard_negative"
+    assert suggest(["menu_terms", "normal_track"]) == "hard_negative"
+
+
+def test_suggest_normal_track_one_address_signal_is_hard_negative():
+    assert suggest(["numeric", "deposit_page", "normal_track"]) == "hard_negative"
+
+
+def test_suggest_without_normal_track_unchanged():
+    assert suggest(["deposit_page"]) == "gambling"
+    assert suggest(["menu_terms"]) == "gambling"
+    assert suggest(["deposit_page", "many_ext"]) == ""
+    assert suggest(["numeric", "idn"]) == "gambling"
+
+
+def test_suggest_normal_track_blocked():
+    assert suggest(["normal_track", "blocked_kr"]) == "blocked"

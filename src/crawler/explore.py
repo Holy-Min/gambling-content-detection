@@ -10,7 +10,7 @@ from .config import CANDIDATE_LABEL, Settings
 from .domains import registrable_domain
 from .keywords import AUTO_HEADER, expand, extract_terms, load_state, save_state
 from .review import ReviewRow, build_row, looks_like_community, write_review_csv
-from .seeds import Seed, append_seed, load_blocklist, read_keywords, read_rows, update_notes, write_keywords
+from .seeds import Seed, is_normal_source, append_seed, load_blocklist, read_keywords, read_rows, update_notes, write_keywords
 from .store import Store
 
 UNVERIFIED = "unverified"
@@ -19,6 +19,7 @@ UNVERIFIED = "unverified"
 @dataclass
 class ExploreResult:
     precaptured: int = 0
+    precaptured_normal: int = 0
     capture_summary: dict = field(default_factory=dict)
     review_rows: list[ReviewRow] = field(default_factory=list)
     review_csv: Path | None = None
@@ -28,21 +29,31 @@ class ExploreResult:
     timed_out: bool = False
 
 
-def select_candidates(candidates_csv: Path, max_n: int, blocklist: set[str] = frozenset()) -> list[Seed]:
-    """note 가 unverified 인 후보를 added_at 최신순(같은 날짜는 파일 순서)으로 max_n개. 같은 등록 도메인은 첫 행만."""
-    rows = [r for r in read_rows(candidates_csv) if r["note"] == UNVERIFIED and registrable_domain(r["url"]) not in blocklist]
-    rows.sort(key=lambda r: r["added_at"], reverse=True)
+def _pick(rows: list[dict], limit: int, seen: set[str]) -> list[Seed]:
     out: list[Seed] = []
-    seen: set[str] = set()
     for r in rows:
+        if len(out) >= limit:
+            break
         d = registrable_domain(r["url"])
         if d in seen:
             continue
         seen.add(d)
         out.append(Seed(url=r["url"], source=r["source"], added_at=r["added_at"], note=r["note"]))
-        if len(out) >= max_n:
-            break
     return out
+
+
+def select_candidates(candidates_csv: Path, max_n: int, blocklist: set[str] = frozenset(), max_normal: int = 0) -> list[Seed]:
+    """note 가 unverified 인 후보를 added_at 최신순(같은 날짜는 파일 순서)으로 max_n개. 같은 등록 도메인은 첫 행만.
+    max_normal 이 0 이면 출처를 가리지 않고 섞어 뽑는다(기존 동작). 0 보다 크면 정상 출처(search-normal:)를 min(max_normal, max_n)곳까지
+    먼저 뽑고, 나머지 자리는 도박 쪽이 채운다. 반환은 도박 먼저, 정상 다음. 두 쪽에 같은 등록 도메인이 있으면 정상 쪽에서만 뽑는다."""
+    rows = [r for r in read_rows(candidates_csv) if r["note"] == UNVERIFIED and registrable_domain(r["url"]) not in blocklist]
+    rows.sort(key=lambda r: r["added_at"], reverse=True)
+    seen: set[str] = set()
+    if max_normal <= 0:
+        return _pick(rows, max_n, seen)
+    normal = _pick([r for r in rows if is_normal_source(r["source"])], min(max_normal, max_n), seen)
+    gambling = _pick([r for r in rows if not is_normal_source(r["source"])], max_n - len(normal), seen)
+    return gambling + normal
 
 
 def candidate_settings(settings: Settings) -> Settings:
@@ -103,16 +114,19 @@ async def run_explore(settings: Settings, *, seeds_dir: Path, out_dir: Path, tod
     out_dir.mkdir(parents=True, exist_ok=True)
     res = ExploreResult()
     candidates_csv = seeds_dir / "candidates.csv"
-    seeds = select_candidates(candidates_csv, max_candidates or settings.nightly_max_candidates, load_blocklist(seeds_dir / "blocklist.txt"))
+    seeds = select_candidates(candidates_csv, max_candidates or settings.nightly_max_candidates, load_blocklist(seeds_dir / "blocklist.txt"),
+                              max_normal=settings.nightly_max_normal_candidates)
+    normal_domains = {registrable_domain(x.url) for x in seeds if is_normal_source(x.source)}
     review_store = Store(settings.review_root, settings.salt)
     if seeds:
         res.capture_summary, res.timed_out = await precapture(settings, seeds, review_store, budget_sec)
     res.review_rows = review_rows_for(review_store, seeds)
     res.precaptured = len(res.review_rows)
+    res.precaptured_normal = sum(1 for r in res.review_rows if r.domain in normal_domains)
     res.auto_communities = register_communities(res.review_rows, seeds_dir / "community_lists.csv", today, settings.nightly_max_auto_communities)
     res.review_csv = out_dir / "review.csv"
     write_review_csv(res.review_csv, res.review_rows, merge=True)
     update_notes(candidates_csv, {r.domain: f"review: {today}" for r in res.review_rows})
     res.keywords_added, res.keywords_retired = expand_keywords(
-        settings, seeds_dir, Store(settings.out_root, settings.salt), [r.title for r in res.review_rows if r.status == "ok"])
+        settings, seeds_dir, Store(settings.out_root, settings.salt), [r.title for r in res.review_rows if r.status == "ok" and r.domain not in normal_domains])   # 정상 쪽 제목은 도박 키워드 후보에서 뺀다
     return res

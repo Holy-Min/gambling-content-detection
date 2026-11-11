@@ -18,6 +18,7 @@ launchctl bootout gui/$(id -u)/com.gambling-crawler.nightly         # 해제
 4. 시드 변경(`seeds/*.csv`, `keywords_auto.txt`, `explore_state.json`)은 루프가 커밋하지 않는다. 확인 후 직접 커밋한다.
 
 ## 수동 실행
+- 정상 쪽 검색(`seeds/keywords_normal.txt`, 밤마다 5개)은 도박 쪽 search 가 끝난 뒤 같은 단계 안에서 돈다. 파일이 없거나 비면 건너뛴다.
 - 전체: `.venv/bin/python -m crawler nightly` (`--dry-run` 으로 계획만, `--only explore` 처럼 단계 선택, `--budget-min 30`)
 - 선캡처만: `.venv/bin/python -m crawler explore --max-candidates 10`
 - 리뷰 루트 현황: `.venv/bin/python -m crawler stats --review`

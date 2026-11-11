@@ -46,3 +46,9 @@ def test_stats_review_and_capture_recapture_days():
     assert build_parser().parse_args(["stats"]).review is False
     assert build_parser().parse_args(["capture", "--label", "normal", "--seeds", "s.csv", "--recapture-days", "1"]).recapture_days == 1
     assert build_parser().parse_args(["capture", "--label", "normal", "--seeds", "s.csv"]).recapture_days is None
+
+
+def test_discover_search_track_option():
+    assert build_parser().parse_args(["discover", "search"]).track == "gambling"
+    ns = build_parser().parse_args(["discover", "search", "--track", "normal"])
+    assert ns.track == "normal"

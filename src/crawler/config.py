@@ -34,6 +34,8 @@ class Settings:
     skip_blocked_days: int = 7  # 홈이 이 일수 안에 blocked_kr 였던 도메인은 통째로 건너뛴다
     review_root: Path | None = None   # 선캡처(candidate) 저장 루트. None 이면 out_root/_review
     nightly_search_auto: int = 5            # 밤당 돌릴 자동 키워드 수
+    nightly_search_normal: int = 5          # 밤당 돌릴 정상 키워드 수
+    nightly_max_normal_candidates: int = 15  # 밤당 선캡처 후보 중 정상 쪽 상한(전체 상한 안에서)
     nightly_max_candidates: int = 40        # 밤당 선캡처할 새 후보 도메인 수
     nightly_candidate_pages: int = 2        # 후보 도메인당 페이지 수
     nightly_max_auto_communities: int = 5   # 밤당 커뮤니티 자동 등록 수

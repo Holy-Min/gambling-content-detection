@@ -10,6 +10,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from .config import LABELS
 from .fsutil import atomic_write_text
+from .seeds import NORMAL_SOURCE_PREFIX
 from .store import Store
 
 REF_KEYS = frozenset({"code", "ref", "aff", "partner", "invite", "recommend", "rec", "추천"})
@@ -77,6 +78,8 @@ def signals(domain: str, rows: list[dict]) -> list[str]:
         sig.append("verify_terms")
     if home and home.get("status") in HOME_STATUS_SIGNALS:
         sig.append(home["status"])
+    if any(str(m.get("seed_source") or "").startswith(NORMAL_SOURCE_PREFIX) for m in rows):
+        sig.append("normal_track")
     return sig
 
 
@@ -90,9 +93,12 @@ def suggest(sig: list[str]) -> str:
         return "blocked"
     if looks_like_community(sig):
         return "community"
+    addr = len(s & {"ref_param", "tld_gambling", "idn", "numeric"}) >= 2
+    if "normal_track" in s:   # 정상 쪽 후보: 충전 화면·메뉴 신호는 무시, 주소 신호 2개 이상일 때만 도박
+        return "gambling" if addr else "hard_negative"
     if ("deposit_page" in s or "menu_terms" in s) and "many_ext" not in s:
         return "gambling"
-    if len(s & {"ref_param", "tld_gambling", "idn", "numeric"}) >= 2:
+    if addr:
         return "gambling"
     return ""
 

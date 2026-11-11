@@ -56,3 +56,8 @@ def test_review_root_from_env_and_override(tmp_path):
 
 def test_default_out_moved_to_datasets():
     assert DEFAULT_OUT == Path("/Users/seongmin/datasets/gambling")
+
+
+def test_normal_track_settings_defaults():
+    s = Settings(out_root=Path("/x"), salt="s")
+    assert (s.nightly_search_normal, s.nightly_max_normal_candidates) == (5, 15)

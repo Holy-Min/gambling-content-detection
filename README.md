@@ -45,6 +45,10 @@ notebooks/         실험 노트북 (예정)
 references/        선행 연구 정리
 ```
 
+### 정상 쪽 탐색 경로
+
+야간 루프(`python -m crawler nightly`)는 도박 키워드 검색이 끝난 뒤 `seeds/keywords_normal.txt` 의 정상 키워드(게임 결제·상품권·스포츠·금융·경품 등)도 밤마다 5개씩 검색한다. 이렇게 찾은 후보는 `search-normal:<키워드>` 출처로 candidates.csv 에 들어가고, 선캡처 후보 자리 최대 15곳을 쓰며, 판정표에서는 도박 신호가 없으면 `hard_negative` 로 추천된다. 수동 실행: `python -m crawler discover search --keywords seeds/keywords_normal.txt --track normal`.
+
 ## 문서
 
 | 문서 | 내용 | 바로 열람 | 편집용 |

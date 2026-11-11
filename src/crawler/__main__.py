@@ -42,6 +42,8 @@ def build_parser() -> argparse.ArgumentParser:
     ds = dk.add_parser("search", help="Yahoo 검색 결과 수집")
     ds.add_argument("--keywords", default=str(SEEDS_DIR / "keywords.txt"))
     ds.add_argument("--per-keyword", type=int, default=20)
+    ds.add_argument("--track", choices=("gambling", "normal"), default="gambling",
+                    help="후보 출처 구분: gambling=search:, normal=search-normal:")
     ds.add_argument("--out", default=str(SEEDS_DIR / "candidates.csv"))
 
     c = sub.add_parser("capture", help="시드 파일의 도메인을 캡처")
@@ -97,7 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         if ns.kind == "community":
             n = asyncio.run(discover_community(settings, Path(ns.seeds), Path(ns.out), known)).added
         else:
-            n = asyncio.run(discover_search(settings, Path(ns.keywords), Path(ns.out), known, ns.per_keyword))
+            n = asyncio.run(discover_search(settings, Path(ns.keywords), Path(ns.out), known, ns.per_keyword,
+                                       ns.track))
         print(f"후보 {n}개 추가 → {ns.out}. 검토 후 seeds/gambling.csv로 옮기세요.")
         return 0
     if ns.command == "nightly":

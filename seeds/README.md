@@ -9,6 +9,7 @@
 | community_lists.csv | 검증 커뮤니티 페이지 (discover community 입력) | 사람이 직접 |
 | candidates.csv | 자동 발견 결과. **capture는 이 파일을 직접 읽지 않는다** | discover / capture --emit-candidates |
 | keywords.txt | discover search 키워드 (Yahoo 검색) | 사람이 직접 |
+| keywords_normal.txt | 정상 쪽 검색 키워드 15개 (밤마다 5개씩 회전) | 사람이 직접 |
 | blocklist.txt | 어떤 경우에도 열지 않을 도메인 | 사람이 직접 |
 
 컬럼: `url,source,added_at,note`. 같은 등록 도메인은 첫 줄만 쓰인다.
@@ -29,4 +30,5 @@
 - `candidates.csv`: discover 가 `unverified` 로 추가하고, 선캡처하면 note 를 `review: <날짜>` 로, `promote` 가 판정 결과(`→ gambling.csv (review <날짜>)`, `excluded: …`, `blocked_kr <날짜>`)로 바꾼다.
 - `community_lists.csv`: 선캡처 페이지가 커뮤니티로 보이면 `source=auto:<날짜>`, `note=자동 등록(미검토)` 로 추가된다. `exclude` 판정이면 지워진다.
 - `keywords_auto.txt`, `explore_state.json`: 자동 키워드와 수확 기록. 손으로 고칠 키워드는 `keywords.txt` 에만.
+- 정상 쪽 검색: `keywords_normal.txt` 키워드로 찾은 후보는 `source=search-normal:<키워드>` 로 들어가고(도박 쪽은 `search:<키워드>`), 선캡처 후보 자리 중 최대 `nightly_max_normal_candidates`(15)곳을 차지한다. 판정표에서는 `normal_track` 신호가 붙고 주소 신호(ref_param·tld_gambling·idn·numeric)가 2개 미만이면 추천이 `hard_negative` 이다(충전 화면·메뉴 신호는 무시). 수확 기록은 origin `normal` 로 남고 자동 키워드 퇴역 대상이 아니다.
 - 라벨 시드 4개: `promote` 가 `source=review:<날짜>` 로 추가한다.

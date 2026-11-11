@@ -107,3 +107,145 @@ def test_keywords_to_record_drops_trailing_zero_streak_on_bot_check():
 def test_cell_escapes_pipe_and_html_chars():
     from crawler.nightly import _cell
     assert _cell("a|<b>`c`") == "a\\|&lt;b&gt;\\`c\\`"
+
+
+# ---------- 정상 쪽 탐색 경로 ----------
+
+def _normal_runner(tmp_path, *, normal_kws=None, **kw):
+    seeds = tmp_path / "seeds"
+    seeds.mkdir(exist_ok=True)
+    (seeds / "keywords.txt").write_text("도박키워드\n", encoding="utf-8")
+    if normal_kws is not None:
+        (seeds / "keywords_normal.txt").write_text("# 주석\n" + "\n".join(normal_kws) + "\n", encoding="utf-8")
+    return Runner(tiny_settings(tmp_path), seeds_dir=seeds, out_base=tmp_path / "out", today="2026-11-11", **kw)
+
+
+def _fake_search(calls, *, gambling_bot=False, gambling_timeout=False, normal_bot=False, normal_run=None):
+    from crawler.discover import SearchTally
+
+    async def fake(settings, keywords, out_csv, known, per_keyword=20, stop_after_zero=2, deadline=None, track="gambling"):
+        calls.append((track, list(keywords)))
+        t = SearchTally(stop_after=2)
+        if track == "normal":
+            for k in (keywords if normal_run is None else keywords[:normal_run]):
+                t.add(k, links=0 if normal_bot else 3, added=0 if normal_bot else 1)
+            t.bot_check = normal_bot
+            t.timed_out = normal_run is not None
+        else:
+            for k in keywords:
+                t.add(k, links=3, added=2)
+            t.bot_check, t.timed_out = gambling_bot, gambling_timeout
+        return t
+    return fake
+
+
+def test_normal_keywords_rotation(tmp_path):
+    from crawler.keywords import load_state, record_run, save_state
+    kws = [f"k{i}" for i in range(15)]
+    r = _normal_runner(tmp_path, normal_kws=kws)
+    assert r.normal_keywords() == kws[:5]
+    state = load_state(r.seeds_dir / "explore_state.json")
+    for k in kws[:5]:
+        record_run(state, k, 1, "2026-11-10", origin="normal")
+    save_state(r.seeds_dir / "explore_state.json", state)
+    assert r.normal_keywords() == kws[5:10]
+
+
+async def test_normal_keywords_missing_file(tmp_path, monkeypatch):
+    import crawler.nightly as nm
+    calls = []
+    monkeypatch.setattr(nm, "discover_search_keywords", _fake_search(calls))
+    r = _normal_runner(tmp_path)
+    assert r.normal_keywords() == []
+    res = await r.stage_search(10)
+    assert [c[0] for c in calls] == ["gambling"]
+    assert res["normal_keywords"] == [] and res["normal_candidates_added"] == 0 and res["normal_bot_check"] is False
+    assert res["normal_timed_out"] is False
+    assert res["candidates_added"] == 2 and res["bot_check"] is False
+    (r.seeds_dir / "keywords_normal.txt").write_text("# 주석만\n", encoding="utf-8")
+    assert r.normal_keywords() == []
+
+
+async def test_stage_search_runs_normal_after_gambling(tmp_path, monkeypatch):
+    import crawler.nightly as nm
+    from crawler.keywords import load_state
+    calls = []
+    monkeypatch.setattr(nm, "discover_search_keywords", _fake_search(calls))
+    r = _normal_runner(tmp_path, normal_kws=[f"n{i}" for i in range(8)])
+    res = await r.stage_search(10)
+    assert [c[0] for c in calls] == ["gambling", "normal"]
+    assert calls[1][1] == [f"n{i}" for i in range(5)]
+    assert res["normal_keywords"] == calls[1][1] and res["normal_candidates_added"] == 5
+    assert res["candidates_added"] == 2     # 도박 쪽 수치에 정상 쪽이 섞이지 않는다
+    state = load_state(r.seeds_dir / "explore_state.json")
+    assert state["keywords"]["n0"]["origin"] == "normal" and state["keywords"]["n0"]["last_run"] == "2026-11-11"
+    assert state["keywords"]["도박키워드"]["origin"] == "manual"
+
+
+async def test_stage_search_skips_normal_on_bot_check(tmp_path, monkeypatch):
+    import crawler.nightly as nm
+    for kwargs in ({"gambling_bot": True}, {"gambling_timeout": True}):
+        calls = []
+        monkeypatch.setattr(nm, "discover_search_keywords", _fake_search(calls, **kwargs))
+        r = _normal_runner(tmp_path, normal_kws=["n0", "n1"])
+        res = await r.stage_search(10)
+        assert [c[0] for c in calls] == ["gambling"]
+        assert res["normal_keywords"] == [] and res["normal_candidates_added"] == 0
+        assert res["normal_timed_out"] is False
+
+
+async def test_normal_bot_check_does_not_set_bot_check_date(tmp_path, monkeypatch):
+    import crawler.nightly as nm
+    from crawler.keywords import load_state
+    calls = []
+    monkeypatch.setattr(nm, "discover_search_keywords", _fake_search(calls, normal_bot=True))
+    r = _normal_runner(tmp_path, normal_kws=["n0", "n1", "n2"])
+    res = await r.stage_search(10)
+    assert res["normal_bot_check"] is True and res["bot_check"] is False and res["candidates_added"] == 2
+    assert load_state(r.seeds_dir / "explore_state.json")["bot_check_date"] is None
+
+
+def test_normal_keywords_not_retired_by_expand(tmp_path):
+    from crawler.keywords import expand, load_state, record_run
+    state = load_state(tmp_path / "s.json")
+    for _ in range(5):
+        record_run(state, "n0", 0, "2026-11-11", origin="normal")
+    _, _, retired = expand(state, ["a1"], [], add_per_day=0, pool=10, retire_streak=3)
+    assert "n0" not in retired and not state["keywords"]["n0"].get("retired")
+
+
+def test_dry_run_plan_shows_normal(tmp_path):
+    r = _normal_runner(tmp_path, normal_kws=["n0", "n1"])
+    plan = r.dry_run_plan()
+    assert "정상 검색: 키워드 2개" in plan and "n0" in plan and "정상 후보 자리" in plan
+
+
+def test_build_report_has_normal_lines():
+    from crawler.nightly import StageResult, build_report
+    from crawler.config import LABELS
+    daily = {lab: {"ok": 0, "duplicate": 0, "blocked_kr": 0, "challenge": 0, "error": 0, "total_ok": 0} for lab in LABELS}
+    results = [StageResult("search", "ok", counts={"candidates_added": 3, "normal_keywords": ["n0"], "normal_candidates_added": 4}),
+               StageResult("explore", "ok", counts={"precaptured_normal": 6})]
+    rep = build_report(today="2026-11-11", results=results, daily=daily, review_rows=[], thumbs={}, explore=None, stale_reviews=0, pruned=[], exit_code=0)
+    assert "정상 쪽: 키워드 1개 (n0) · 추가 후보 4 · 미리 찍은 정상 후보 6" in rep
+
+
+async def test_stage_search_normal_timed_out_reports_only_run_keywords(tmp_path, monkeypatch):
+    import crawler.nightly as nm
+    calls = []
+    monkeypatch.setattr(nm, "discover_search_keywords", _fake_search(calls, normal_run=2))
+    r = _normal_runner(tmp_path, normal_kws=[f"n{i}" for i in range(8)])
+    res = await r.stage_search(10)
+    assert calls[1][1] == [f"n{i}" for i in range(5)]
+    assert res["normal_keywords"] == ["n0", "n1"]
+    assert res["normal_timed_out"] is True and res["timed_out"] is False
+
+
+def test_build_report_marks_normal_timed_out():
+    from crawler.nightly import StageResult, build_report
+    from crawler.config import LABELS
+    daily = {lab: {"ok": 0, "duplicate": 0, "blocked_kr": 0, "challenge": 0, "error": 0, "total_ok": 0} for lab in LABELS}
+    results = [StageResult("search", "ok", counts={"normal_keywords": ["n0"], "normal_timed_out": True})]
+    rep = build_report(today="2026-11-11", results=results, daily=daily, review_rows=[], thumbs={}, explore=None, stale_reviews=0, pruned=[], exit_code=0)
+    line = next(l for l in rep.splitlines() if l.startswith("- 정상 쪽:"))
+    assert "마감으로 중단" in line

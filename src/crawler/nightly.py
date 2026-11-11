@@ -23,7 +23,7 @@ from .domains import registrable_domain
 from .explore import ExploreResult, run_explore, select_candidates
 from .keywords import load_state, pick_auto_keywords, record_run, save_state
 from .review import ReviewRow
-from .seeds import all_seed_files, load_blocklist, read_keywords, read_seeds, seed_domains
+from .seeds import all_seed_files, is_normal_source, load_blocklist, read_keywords, read_seeds, seed_domains
 from .stats import STATUSES
 from .store import Store
 
@@ -192,11 +192,21 @@ def build_report(*, today: str, results: list[StageResult], daily: dict, review_
         lines += [f"- 자동 키워드 추가: {', '.join(explore.keywords_added) or '없음'} / 퇴역: {', '.join(explore.keywords_retired) or '없음'}",
                   f"- 커뮤니티 자동 등록: {', '.join(explore.auto_communities) or '없음'}"]
     lines.append("- 후보 추가: " + (" · ".join(f"{n} {by[n].counts.get('candidates_added', 0)}" for n in ("search", "community") if n in by) or "없음"))
+    if "search" in by:
+        sc = by["search"].counts
+        nk = sc.get("normal_keywords", [])
+        lines.append(f"- 정상 쪽: 키워드 {len(nk)}개 ({', '.join(nk) or '없음'}) · 추가 후보 {sc.get('normal_candidates_added', 0)}"
+                     f" · 미리 찍은 정상 후보 {by['explore'].counts.get('precaptured_normal', 0) if 'explore' in by else 0}"
+                     + (" · 마감으로 중단" if sc.get("normal_timed_out") else ""))
     lines += ["", "## 실패·경고"]
     warn = [f"- {r.name}: {r.error.splitlines()[0]}" for r in results if r.error and r.status != SKIPPED]
     warn += [f"- {r.name}: 건너뜀 ({r.error})" for r in results if r.status == SKIPPED and r.error]
     if "search" in by and by["search"].counts.get("bot_check"):
         warn.append("- search: Yahoo 봇 확인으로 조기 종료")
+    if "search" in by and by["search"].counts.get("normal_bot_check"):
+        warn.append("- search: 정상 쪽 검색이 봇 확인으로 조기 종료(도박 쪽 판정과 무관)")
+    if "search" in by and by["search"].counts.get("normal_timed_out"):
+        warn.append("- search: 정상 쪽 검색이 시간 마감으로 일부만 실행")
     if stale_reviews:
         warn.append(f"- {STALE_REVIEW_DAYS}일 넘게 판정 안 된 리뷰 도메인 {stale_reviews}개")
     if pruned:
@@ -240,10 +250,19 @@ class Runner:
         auto = pick_auto_keywords(state, read_keywords(self.seeds_dir / "keywords_auto.txt"), self.settings.nightly_search_auto)
         return manual, auto
 
+    def normal_keywords(self) -> list[str]:
+        """정상 쪽 검색 키워드: keywords_normal.txt 에서 회전으로 nightly_search_normal 개. 파일이 없거나 비면 []."""
+        pool = read_keywords(self.seeds_dir / "keywords_normal.txt") if (self.seeds_dir / "keywords_normal.txt").exists() else []
+        if not pool:
+            return []
+        state = load_state(self.seeds_dir / "explore_state.json")
+        return pick_auto_keywords(state, pool, self.settings.nightly_search_normal)
+
     async def stage_search(self, budget: float) -> dict:
         manual, auto = self.search_keywords()
+        deadline = time.monotonic() + budget
         tally = await discover_search_keywords(self.settings, manual + auto, self.seeds_dir / "candidates.csv", self.known(), stop_after_zero=2,
-                                               deadline=time.monotonic() + budget)
+                                               deadline=deadline)
         state_path = self.seeds_dir / "explore_state.json"
         state = load_state(state_path)
         for kw in keywords_to_record(tally):
@@ -251,8 +270,22 @@ class Runner:
         if tally.bot_check:
             state["bot_check_date"] = self.today
         save_state(state_path, state)
+        # 정상 쪽은 도박 쪽이 멀쩡히 끝났을 때만, 별도 tally 로 돈다. 정상 쪽 bot_check 는 bot_check_date 를 건드리지 않는다.
+        normal = [] if tally.bot_check or tally.timed_out else self.normal_keywords()
+        normal_tally = None
+        if normal:
+            normal_tally = await discover_search_keywords(self.settings, normal, self.seeds_dir / "candidates.csv", self.known(), stop_after_zero=2,
+                                                          deadline=deadline, track="normal")
+            state = load_state(state_path)
+            for kw in keywords_to_record(normal_tally):
+                record_run(state, kw, normal_tally.added[kw], self.today, origin="normal")
+            save_state(state_path, state)
         return {"keywords": len(tally.added), "auto_keywords": auto, "candidates_added": tally.total_added, "bot_check": tally.bot_check,
-                "timed_out": tally.timed_out}
+                "timed_out": tally.timed_out,
+                "normal_keywords": list(normal_tally.added) if normal_tally else [],
+                "normal_timed_out": normal_tally.timed_out if normal_tally else False,
+                "normal_candidates_added": normal_tally.total_added if normal_tally else 0,
+                "normal_bot_check": normal_tally.bot_check if normal_tally else False}
 
     async def stage_community(self, budget: float) -> dict:
         tally = await discover_community(self.settings, self.seeds_dir / "community_lists.csv", self.seeds_dir / "candidates.csv", self.known(),
@@ -263,7 +296,7 @@ class Runner:
     async def stage_explore(self, budget: float) -> dict:
         res = await run_explore(self.settings, seeds_dir=self.seeds_dir, out_dir=self.out_dir, today=self.today, budget_sec=max(1.0, budget - 60))
         self.explore_result = res
-        return {"precaptured": res.precaptured, "auto_communities": res.auto_communities, "keywords_added": res.keywords_added,
+        return {"precaptured": res.precaptured, "precaptured_normal": res.precaptured_normal, "auto_communities": res.auto_communities, "keywords_added": res.keywords_added,
                 "keywords_retired": res.keywords_retired, "timed_out": res.timed_out,
                 **{k: res.capture_summary.get(k, 0) for k in ("ok", "duplicate", "blocked_kr", "challenge", "error")}}
 
@@ -366,11 +399,16 @@ class Runner:
 
     def dry_run_plan(self) -> str:
         manual, auto = self.search_keywords()
-        cands = select_candidates(self.seeds_dir / "candidates.csv", self.settings.nightly_max_candidates, load_blocklist(self.seeds_dir / "blocklist.txt"))
+        cands = select_candidates(self.seeds_dir / "candidates.csv", self.settings.nightly_max_candidates, load_blocklist(self.seeds_dir / "blocklist.txt"),
+                                  self.settings.nightly_max_normal_candidates)
+        normal = self.normal_keywords()
+        normal_cands = [c for c in cands if is_normal_source(c.source)]
         lines = [f"# dry-run {self.today} — 단계: {', '.join(self.wanted) or '없음'}",
                  f"search: 키워드 {len(manual) + len(auto)}개 (수동 {len(manual)} + 자동 {auto})",
+                 f"search: 정상 검색: 키워드 {len(normal)}개 ({', '.join(normal) or '없음'})",
                  f"community: 커뮤니티 페이지 {len(read_seeds(self.seeds_dir / 'community_lists.csv'))}개",
                  f"explore: 선캡처 후보 {len(cands)}개 → {self.settings.review_root}",
+                 f"explore: 정상 후보 자리 최대 {self.settings.nightly_max_normal_candidates}개 (지금 후보 중 정상 {len(normal_cands)}개)",
                  "capture: " + " · ".join(f"{lab} {len(read_seeds(self.seeds_dir / f'{lab}.csv'))}" for lab in LABELS) + f" 도메인 (recapture_days={self.settings.recapture_days})",
                  f"예산: 전체 {self.budget_sec / 60:.0f}분, 단계별 {self.settings.nightly_budget_min}"]
         return "\n".join(lines)

@@ -14,7 +14,7 @@ from .blocked import is_blocked_kr
 from .browser import attach_page_guards, new_context, open_browser
 from .config import Settings
 from .domains import registrable_domain
-from .seeds import append_candidates, is_platform, read_keywords, read_seeds
+from .seeds import NORMAL_SOURCE_PREFIX, append_candidates, is_normal_source, is_platform, read_keywords, read_seeds
 
 # DuckDuckGo HTML 엔드포인트는 헤드리스 브라우저에 403을 돌려주어(2026-09 확인) Yahoo 검색을 쓴다.
 SEARCH_URL = "https://search.yahoo.com/search?p={q}"
@@ -146,12 +146,22 @@ class SearchTally:
         return sum(self.added.values())
 
 
+def search_source(keyword: str, track: str = "gambling") -> str:
+    """검색 후보의 출처 문자열. 도박은 search:, 정상은 search-normal:."""
+    if track == "gambling":
+        return f"search:{keyword}"
+    if track == "normal":
+        return f"{NORMAL_SOURCE_PREFIX}{keyword}"
+    raise ValueError(f"알 수 없는 track: {track}")
+
+
 async def discover_search_keywords(settings: Settings, keywords: list[str], out_csv: Path, known_domains: set[str],
                                    per_keyword: int = 20, stop_after_zero: int | None = 2,
-                                   deadline: float | None = None) -> SearchTally:
+                                   deadline: float | None = None, track: str = "gambling") -> SearchTally:
     """키워드마다 새 브라우저 컨텍스트를 쓴다(같은 컨텍스트로 질의를 반복하면 Yahoo가 봇 확인 페이지로 보낸다).
     stop_after_zero 가 있으면 결과 0개가 그만큼 연속일 때 멈춘다(야간 루프). None 이면 끝까지 돈다(수동).
     deadline(time.monotonic 기준)이 지나면 다음 키워드를 시작하지 않고 tally.timed_out 으로 멈춘다."""
+    search_source("", track)  # track 값 검증(브라우저를 열기 전에)
     tally = SearchTally(stop_after_zero if stop_after_zero else 10 ** 9)
     async with async_playwright() as pw:
         browser = await open_browser(pw)
@@ -175,7 +185,7 @@ async def discover_search_keywords(settings: Settings, keywords: list[str], out_
                 finally:
                     await context.close()
                 urls = external_domains_urls(links, "yahoo.com")
-                added = append_candidates(out_csv, urls, source=f"search:{kw}", known_domains=known_domains)
+                added = append_candidates(out_csv, urls, source=search_source(kw, track), known_domains=known_domains)
                 known_domains.update(registrable_domain(u) for u in added)
                 tally.add(kw, len(links), len(added))
                 print(f"[search] {kw}: 결과 {len(links)}개 중 {len(added)}개 추가")
@@ -189,8 +199,8 @@ async def discover_search_keywords(settings: Settings, keywords: list[str], out_
 
 
 async def discover_search(settings: Settings, keywords_path: Path, out_csv: Path, known_domains: set[str],
-                          per_keyword: int = 20) -> int:
+                          per_keyword: int = 20, track: str = "gambling") -> int:
     """키워드 파일을 읽어 조기 종료 없이 수확한다(수동 실행용)."""
     tally = await discover_search_keywords(settings, read_keywords(Path(keywords_path)), out_csv, known_domains,
-                                           per_keyword, stop_after_zero=None)
+                                           per_keyword, stop_after_zero=None, track=track)
     return tally.total_added

@@ -12,6 +12,14 @@ from .config import LABELS
 from .domains import registrable_domain
 from .fsutil import atomic_write_text
 
+NORMAL_SOURCE_PREFIX = "search-normal:"
+
+
+def is_normal_source(source: str) -> bool:
+    """후보 출처가 정상 쪽 검색(search-normal:)인지."""
+    return source.startswith(NORMAL_SOURCE_PREFIX)
+
+
 HEADER = ["url", "source", "added_at", "note"]
 
 PLATFORM_BLOCKLIST = frozenset({
