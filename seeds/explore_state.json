@@ -18,19 +18,19 @@
    "zero_streak": 0
   },
   "ZXC벳 카지노": {
-   "added_total": 4,
-   "last_run": "2026-11-09",
+   "added_total": 5,
+   "last_run": "2026-11-18",
    "origin": "auto",
    "retired": false,
-   "runs": 1,
+   "runs": 2,
    "zero_streak": 0
   },
   "e스포츠 중계": {
-   "added_total": 1,
-   "last_run": "2026-11-13",
+   "added_total": 3,
+   "last_run": "2026-11-18",
    "origin": "normal",
    "retired": false,
-   "runs": 1,
+   "runs": 2,
    "zero_streak": 0
   },
   "검증사이트": {
@@ -82,11 +82,11 @@
    "zero_streak": 0
   },
   "기프트카드 구매": {
-   "added_total": 1,
-   "last_run": "2026-11-13",
+   "added_total": 3,
+   "last_run": "2026-11-18",
    "origin": "normal",
    "retired": false,
-   "runs": 1,
+   "runs": 2,
    "zero_streak": 0
   },
   "라바 카지노": {
@@ -115,11 +115,11 @@
   },
   "먹튀검증": {
    "added_total": 17,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 0
+   "runs": 9,
+   "zero_streak": 1
   },
   "먹튀사이트": {
    "added_total": 2,
@@ -131,19 +131,19 @@
   },
   "메이저 베팅사이트": {
    "added_total": 6,
-   "last_run": "2026-11-09",
+   "last_run": "2026-11-18",
    "origin": "auto",
    "retired": false,
-   "runs": 1,
-   "zero_streak": 0
+   "runs": 2,
+   "zero_streak": 1
   },
   "메이저사이트": {
    "added_total": 4,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 2
+   "runs": 9,
+   "zero_streak": 3
   },
   "모바일 게임 쿠폰": {
    "added_total": 9,
@@ -179,18 +179,18 @@
   },
   "바카라사이트": {
    "added_total": 8,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 2
+   "runs": 9,
+   "zero_streak": 3
   },
   "베팅사이트": {
-   "added_total": 4,
-   "last_run": "2026-11-09",
+   "added_total": 5,
+   "last_run": "2026-11-18",
    "origin": "auto",
    "retired": false,
-   "runs": 1,
+   "runs": 2,
    "zero_streak": 0
   },
   "베팅사이트 안전놀이터": {
@@ -219,11 +219,11 @@
   },
   "스포츠토토 사이트 추천": {
    "added_total": 2,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 2
+   "runs": 9,
+   "zero_streak": 3
   },
   "스피드 바카라": {
    "added_total": 9,
@@ -235,19 +235,19 @@
   },
   "슬롯사이트": {
    "added_total": 8,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 2
+   "runs": 9,
+   "zero_streak": 3
   },
   "안전놀이터": {
    "added_total": 5,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 2
+   "runs": 9,
+   "zero_streak": 3
   },
   "온라인 카지노": {
    "added_total": 2,
@@ -259,11 +259,11 @@
   },
   "온라인카지노": {
    "added_total": 6,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 2
+   "runs": 9,
+   "zero_streak": 3
   },
   "온라인카지노 토토사이트": {
    "added_total": 1,
@@ -282,11 +282,11 @@
    "zero_streak": 1
   },
   "이벤트 월식카지노": {
-   "added_total": 6,
-   "last_run": "2026-11-09",
+   "added_total": 9,
+   "last_run": "2026-11-18",
    "origin": "auto",
    "retired": false,
-   "runs": 1,
+   "runs": 2,
    "zero_streak": 0
   },
   "일반 바카라": {
@@ -323,11 +323,11 @@
   },
   "축구 실시간 스코어": {
    "added_total": 1,
-   "last_run": "2026-11-13",
+   "last_run": "2026-11-18",
    "origin": "normal",
    "retired": false,
-   "runs": 1,
-   "zero_streak": 0
+   "runs": 2,
+   "zero_streak": 1
   },
   "출석체크 이벤트": {
    "added_total": 4,
@@ -346,20 +346,20 @@
    "zero_streak": 1
   },
   "카지노 슬롯": {
-   "added_total": 3,
-   "last_run": "2026-11-09",
+   "added_total": 5,
+   "last_run": "2026-11-18",
    "origin": "auto",
    "retired": false,
-   "runs": 1,
+   "runs": 2,
    "zero_streak": 0
   },
   "카지노사이트": {
    "added_total": 0,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 8
+   "runs": 9,
+   "zero_streak": 9
   },
   "카지노사이트 69카지노": {
    "added_total": 4,
@@ -379,19 +379,19 @@
   },
   "코인 거래소": {
    "added_total": 2,
-   "last_run": "2026-11-13",
+   "last_run": "2026-11-18",
    "origin": "normal",
    "retired": false,
-   "runs": 1,
-   "zero_streak": 0
+   "runs": 2,
+   "zero_streak": 1
   },
   "토토사이트": {
    "added_total": 6,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 2
+   "runs": 9,
+   "zero_streak": 3
   },
   "토토사이트 슬롯": {
    "added_total": 0,
@@ -403,11 +403,11 @@
   },
   "파워볼사이트": {
    "added_total": 2,
-   "last_run": "2026-11-17",
+   "last_run": "2026-11-18",
    "origin": "manual",
    "retired": false,
-   "runs": 8,
-   "zero_streak": 0
+   "runs": 9,
+   "zero_streak": 1
   },
   "포인트 충전소": {
    "added_total": 10,
@@ -419,11 +419,11 @@
   },
   "프로야구 경기 결과": {
    "added_total": 0,
-   "last_run": "2026-11-13",
+   "last_run": "2026-11-18",
    "origin": "normal",
    "retired": false,
-   "runs": 1,
-   "zero_streak": 1
+   "runs": 2,
+   "zero_streak": 2
   },
   "환율 계산": {
    "added_total": 1,
