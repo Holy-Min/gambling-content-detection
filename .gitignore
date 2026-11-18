@@ -31,3 +31,4 @@ out/
 
 # Claude Code / TDD Guard local data
 .claude/
+.venv-detector/

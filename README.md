@@ -45,6 +45,23 @@ notebooks/         실험 노트북 (예정)
 references/        선행 연구 정리
 ```
 
+## 판정 엔진(detector) 재현
+
+1차 판정 평가(`src/detector/`)는 맥에서 돌린다. macOS와 Xcode Command Line Tools(`swiftc`)가 필요하다(OCR 바이너리를 `~/datasets/gambling/_features/bin`에 만들어 두고 쓴다).
+
+```
+python3.12 -m venv .venv-detector          # torch가 이미 있으면 --system-site-packages 를 붙여도 된다
+.venv-detector/bin/pip install -r requirements-detector.txt
+.venv-detector/bin/python -m detector ocr        # 화면 OCR → _features/ocr
+.venv-detector/bin/python -m detector embed      # CLIP 임베딩 → _features/clip
+.venv-detector/bin/python -m detector evaluate   # docs/week11/metrics.{json,md} 와 그림
+.venv-detector/bin/python -m detector evidence   # docs/week11/problem_evidence.{json,md}
+```
+
+- 수집 화면은 비공개라 저장소에 없다. `~/datasets/gambling`에 두고, 기본 인덱스는 `_features/index_snapshot_20261109T1400.jsonl`이다(`--index`·`--root`로 바꿀 수 있다).
+- `evidence`는 시드 목록을 작업 트리가 아니라 git HEAD에서 읽고, 쓴 커밋을 `problem_evidence.json`의 `seeds_ref_sha`에 남긴다.
+- 테스트는 `.venv-detector/bin/python -m pytest tests/detector -q`.
+
 ## 문서
 
 | 문서 | 내용 | 바로 열람 | 편집용 |
