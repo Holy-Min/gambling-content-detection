@@ -219,7 +219,7 @@ def build_report(*, today: str, results: list[StageResult], daily: dict, review_
 
 class Runner:
     def __init__(self, settings: Settings, *, seeds_dir: Path, out_base: Path, today: str, only: list[str] | None = None,
-                 skip: list[str] | None = None, budget_min: float = 90, dry_run: bool = False,
+                 skip: list[str] | None = None, budget_min: float = 110, dry_run: bool = False,
                  stages: dict[str, StageFn] | None = None, grace_sec: float = 300.0, hard_kill_grace_sec: float = 900.0):
         self.settings = settings
         self.seeds_dir = Path(seeds_dir)

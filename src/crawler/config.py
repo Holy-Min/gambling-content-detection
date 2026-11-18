@@ -42,7 +42,7 @@ class Settings:
     auto_keyword_pool: int = 30             # 자동 키워드 풀 상한
     auto_keyword_add_per_day: int = 5       # 하루에 더할 자동 키워드 수
     auto_keyword_retire_streak: int = 3     # 후보 0 이 이만큼 연속이면 퇴역
-    nightly_budget_min: dict[str, int] = field(default_factory=lambda: {"search": 12, "community": 8, "explore": 25, "capture": 40})
+    nightly_budget_min: dict[str, int] = field(default_factory=lambda: {"search": 12, "community": 12, "explore": 25, "capture": 55})
     delays: dict[str, float] = field(default_factory=lambda: {
         "gambling": 3.0, "embedded_banner": 3.0, "hard_negative": 5.0, "normal": 5.0, "candidate": 5.0})
     robots_labels: frozenset[str] = frozenset({"hard_negative", "normal", "candidate"})

@@ -26,7 +26,7 @@ def test_stats_default_out_is_none():
 def test_nightly_args_defaults():
     ns = build_parser().parse_args(["nightly"])
     assert ns.command == "nightly" and ns.date is None and ns.out_dir == "out" and ns.only is None and ns.skip is None
-    assert ns.budget_min == 90 and ns.recapture_days == 1 and ns.max_candidates is None and ns.dry_run is False
+    assert ns.budget_min == 110 and ns.recapture_days == 1 and ns.max_candidates is None and ns.dry_run is False
 
 
 def test_nightly_args_only_skip_lists():

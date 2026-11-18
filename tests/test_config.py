@@ -37,7 +37,7 @@ def test_defaults_match_spec():
     assert (s.recapture_days, s.skip_blocked_days) == (7, 7)
     assert (s.nightly_search_auto, s.nightly_max_candidates, s.nightly_candidate_pages, s.nightly_max_auto_communities) == (5, 40, 2, 5)
     assert (s.auto_keyword_pool, s.auto_keyword_add_per_day, s.auto_keyword_retire_streak) == (30, 5, 3)
-    assert s.nightly_budget_min == {"search": 12, "community": 8, "explore": 25, "capture": 40}
+    assert s.nightly_budget_min == {"search": 12, "community": 12, "explore": 25, "capture": 55}
 
 
 def test_review_root_defaults_under_out_root():

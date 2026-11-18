@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     n.add_argument("--out-dir", default="out", help="보고서 루트 (out/<날짜>/)")
     n.add_argument("--only", type=_stage_list, default=None, help="이 단계만 (쉼표 구분)")
     n.add_argument("--skip", type=_stage_list, default=None, help="이 단계는 건너뜀 (쉼표 구분)")
-    n.add_argument("--budget-min", type=int, default=90, help="전체 예산(분)")
+    n.add_argument("--budget-min", type=int, default=110, help="전체 예산(분)")
     n.add_argument("--recapture-days", type=int, default=1)
     n.add_argument("--max-candidates", type=int, default=None, help="선캡처 후보 상한 (기본 40)")
     n.add_argument("--dry-run", action="store_true", help="계획만 출력")
