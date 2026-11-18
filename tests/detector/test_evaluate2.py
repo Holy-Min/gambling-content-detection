@@ -333,3 +333,218 @@ def test_write_reports_no_names(tmp_path):
     for txt in (js, md):
         for leak in ("hashleak", ".fake", "casino-leak", "OCRSECRETMARK", "/img/", ".png"):
             assert leak not in txt
+
+
+# ---- 건지기(글자 우선 + 이미지) · 전체 판정 ----
+def _synth_noisy(seed=3, n_train=40, n_test=16, noise=1.0):
+    """글자·이미지 둘 다 일부 틀리는 합성 데이터(양성/음성 반반). 마지막에 합법 사행·배너 사이트."""
+    rng = np.random.default_rng(seed)
+    S, texts, X = [], [], []
+
+    def add(h, y, label, day, kind, text):
+        base = np.eye(8)[0] * 2 if y == 1 else (np.eye(8)[1] * 2 if y == 0 else np.eye(8)[2] * 2)
+        v = base + rng.normal(0, noise, 8)
+        S.append(Sample(f"s{len(S)}", label, y, h, h, kind, Path(f"/img/{len(S)}.png"), f"{day}T00:00:00"))
+        X.append((v / np.linalg.norm(v)).astype(np.float32)); texts.append(text)
+
+    for pre, n, day in (("T", n_train, "2026-11-10"), ("E", n_test, "2026-11-14")):
+        for i in range(n):
+            y = i % 2
+            lab = "gambling" if y else ("hard_negative" if i % 4 == 0 else "normal")
+            for j in range(3):
+                text_says_bet = (rng.random() < 0.6) if y else (rng.random() < 0.12)
+                words = "bet casino win slot" if text_says_bet else "news weather sport shop"
+                add(f"{pre}{i}", y, lab, day, "deposit" if (y and j == 0) else "home", f"{words} {pre}{i} {j} {rng.integers(99)}")
+    for i in range(2):
+        for j in range(2):
+            add(f"B{i}", None, "embedded_banner", "2026-11-14", "home", "bet casino win banner" if j == 0 else "x")
+    for i in range(2):
+        for j in range(2):
+            add(f"L{i}", None, "legal_gambling", "2026-11-14", "home", "베트맨 sports" if (i == 0 or j == 0) else "nothing here")
+    return S, texts, np.stack(X)
+
+
+def _run_noisy(**kw):
+    S, texts, X = _synth_noisy()
+    return S, texts, X, _run(S, texts, X, **kw)
+
+
+def test_regression_existing_metrics_unchanged():
+    # 건지기·전체 판정을 넣기 전 코드로 같은 합성 데이터를 돌려 얻은 값(소수 6자리)
+    m = _run_noisy()[3]["metrics"]
+    assert m["thr_fpr2"] == pytest.approx({"text": 0.840949518144198, "image": 0.8127551078796388,
+                                           "fusion": 0.5484103313688594})
+    want = {("train_oof", "text", "0.5"): (0.742857, 0.866667, 0.65, 0.1),
+            ("train_oof", "text", "fpr2"): (0.09375, 0.75, 0.05, 0.0),
+            ("train_oof", "fusion", "0.5"): (0.92562, 0.918033, 0.933333, 0.1),
+            ("train_oof", "fusion", "fpr2"): (0.93913, 0.981818, 0.9, 1 / 30),
+            ("test", "text", "0.5"): (0.731707, 0.882353, 0.625, 1 / 12),
+            ("test", "image", "0.5"): (0.978723, 1.0, 0.958333, 0.0),
+            ("test", "fusion", "fpr2"): (0.956522, 1.0, 0.916667, 0.0)}
+    for (sub, mo, tk), (f, p, r, h) in want.items():
+        c = m[sub]["models"][mo][tk]
+        got = (c["f1"][0], c["precision"][0], c["recall"][0], c["fpr_hard_negative"][0])
+        assert got == pytest.approx((f, p, r, h), abs=1e-6), (sub, mo, tk)
+    assert m["banner"]["models"]["fusion"]["fpr2"]["screen_rate"][0] == 0.25
+    assert m["legal"]["rule"]["screen_rate"][0] == 0.75
+
+
+def _hand_counts(rows, y_of, t, split):
+    """rows(공개 CSV 와 같은 값)에서 손으로 센 (건진 수, 글자가 놓친 양성 수, 추가 오탐 수, 글자가 통과시킨 음성 수)."""
+    r = e_n = a = b = 0
+    for i, sp in enumerate(rows["split"]):
+        if sp != split:
+            continue
+        passed = rows["p_text"][i] < 0.5
+        hit = rows["p_image"][i] >= t
+        if y_of(rows["label"][i]) == 1 and passed:
+            a += 1; r += hit
+        if y_of(rows["label"][i]) == 0 and passed:
+            b += 1; e_n += hit
+    return r, a, e_n, b
+
+
+def test_rescue_counts_match_hand_count_and_recall_goes_up():
+    S, texts, X, out = _run_noisy()
+    m, rows = out["metrics"], out["rows"]
+    rs = m["rescue"]
+    t = rs["t_img"]
+    assert t is not None and rs["fp_budget"] == 0.01
+    y_of = lambda lab: 1 if lab == "gambling" else 0
+    for key, split in (("train_oof", "train"), ("test", "test")):
+        r, a, e, b = _hand_counts(rows, y_of, t, split)
+        c = rs["counts"][key]
+        assert (c["rescued"]["n"], c["rescued"]["d"], c["extra_fp"]["n"], c["extra_fp"]["d"]) == (r, a, e, b)
+    assert rs["counts"]["train_oof"]["rescued"]["d"] > 0 and rs["counts"]["test"]["rescued"]["n"] > 0
+    # 학습 OOF 에서 글자가 통과시킨 음성 중 t 이상 비율은 예산 이하
+    c = rs["counts"]["train_oof"]["extra_fp"]
+    assert c["n"] / c["d"] <= 0.01
+    # 이미지가 건진 양성 → 재현율은 글자 단독보다 높고, pred_rescue 는 글자 OR 이미지
+    te = m["test"]["models"]["text"]["0.5"]["recall"][0]
+    assert rs["test"]["recall"][0] > te
+    for i, sp in enumerate(rows["split"]):
+        assert rows["pred_rescue"][i] == int(rows["p_text"][i] >= 0.5 or rows["p_image"][i] >= t)
+    assert set(rs) >= {"test", "test_mirror", "test_unseen", "train_oof"}
+    for k in ("f1", "precision", "recall", "fpr_hard_negative", "fpr_normal", "recall_deposit"):
+        assert len(rs["test"][k]) == 3
+
+
+def test_rescue_image_false_positive_counted():
+    # 글자가 통과시킨 하드 네거티브를 이미지가 높게 보면 오탐으로 센다
+    y = np.array([1, 0, 0, 0]); lab = np.array(["gambling", "hard_negative", "hard_negative", "normal"], dtype=object)
+    kind = np.array([""] * 4, dtype=object); h = np.array(list("abcd"), dtype=object)
+    pt = np.array([0.1, 0.1, 0.1, 0.1]); pi = np.array([0.9, 0.9, 0.1, 0.9])
+    r = e2.rescue_report(y, lab, kind, h, pt, pi, 0.5, 10)
+    assert r["recall"][0] == 1.0 and r["fpr_hard_negative"][0] == 0.5 and r["fpr_normal"][0] == 1.0
+    assert r["precision"][0] == pytest.approx(1 / 3)  # 맞힌 1, 오탐 2
+
+
+def test_t_img_from_train_oof_only_and_not_from_legal_or_banner():
+    S, texts, X, base = _run_noisy()
+    X2, texts2 = X.copy(), list(texts)
+    rng = np.random.default_rng(9)
+    for i, s in enumerate(S):
+        if s.domain_hash.startswith(("E", "B", "L")):  # 시험·배너·합법 사행 쪽을 통째로 바꿈
+            X2[i] = rng.normal(size=8).astype(np.float32); texts2[i] = "zzz changed " + str(i)
+    out = _run(S, texts2, X2)
+    assert out["metrics"]["rescue"]["t_img"] == base["metrics"]["rescue"]["t_img"]
+    assert out["metrics"]["rescue"]["counts"]["train_oof"] == base["metrics"]["rescue"]["counts"]["train_oof"]
+    assert out["metrics"]["rescue"]["counts"]["test"] != base["metrics"]["rescue"]["counts"]["test"]
+
+
+def test_fp_budget_changes_t_img():
+    S, texts, X, a = _run_noisy()
+    b = _run(S, texts, X, fp_budget=0.2)["metrics"]["rescue"]
+    assert b["fp_budget"] == 0.2 and b["t_img"] <= a["metrics"]["rescue"]["t_img"]
+
+
+def test_system_includes_rule_and_rates_by_hand():
+    S, texts, X = _synth_noisy()
+    for i, s in enumerate(S):
+        if s.domain_hash == "E0":  # 시험 하드 네거티브 사이트(3화면)에 상표 낱말
+            texts[i] += " 베트맨"
+    out = _run(S, texts, X)
+    m, rows = out["metrics"], out["rows"]
+    t = m["rescue"]["t_img"]
+    for i in range(len(S)):
+        assert rows["pred_system"][i] == int(rows["pred_rescue"][i] or rows["rule_hit"][i])
+        if S[i].domain_hash == "E0":
+            assert rows["pred_system"][i] == 1
+    assert m["system"]["test"]["fpr_hard_negative"][0] >= m["rescue"]["test"]["fpr_hard_negative"][0]
+    assert m["system"]["test"]["recall"][0] >= m["rescue"]["test"]["recall"][0]
+    # 합법 사행: L0 두 화면과 L1 한 화면에 낱말 → 최소 3/4 화면, 2/2 사이트
+    lg = [i for i, s in enumerate(S) if s.label == "legal_gambling"]
+    want = [rows["pred_system"][i] for i in lg]
+    assert m["system"]["legal"]["screen_rate"][0] == pytest.approx(sum(want) / 4) and sum(want) >= 3
+    assert m["system"]["legal"]["site_rate"][0] == 1.0
+    ba = [i for i, s in enumerate(S) if s.label == "embedded_banner"]
+    pb = [rows["pred_system"][i] for i in ba]
+    assert m["system"]["banner"]["screen_rate"][0] == pytest.approx(sum(pb) / 4)
+    sites = {}
+    for i in ba:
+        sites[S[i].domain_hash] = sites.get(S[i].domain_hash, 0) or rows["pred_system"][i]
+    assert m["system"]["banner"]["site_rate"][0] == pytest.approx(sum(sites.values()) / 2)
+    assert set(m["system"]) == {"test", "test_unseen", "legal", "banner"}
+    json.dumps(m, allow_nan=False)
+
+
+def test_other_encoder_keeps_folds_and_text_predictions():
+    S, texts, X = _synth_noisy()
+    mask = time_split(S, "2026-11-13")
+    base = e2.run_core(S, texts, X, mask, n_boot=10, k=3)
+    rng = np.random.default_rng(1)
+    X_other = rng.normal(size=(len(S), 5)).astype(np.float32)
+    alt = e2.run_core(S, texts, X_other, mask, n_boot=10, k=3, X_mirror=X)
+    assert alt["rows"]["p_text"] == base["rows"]["p_text"]
+    assert alt["rows"]["mirror_of_train"] == base["rows"]["mirror_of_train"]
+    assert alt["metrics"]["thr_fpr2"]["text"] == base["metrics"]["thr_fpr2"]["text"]
+    assert alt["rows"]["p_image"] != base["rows"]["p_image"]
+
+
+def _meta(m):
+    return m | {"cutoff": "2026-11-13", "index": "i.jsonl", "labels": "l.csv", "n_disagreements": 0}
+
+
+def test_output_names_and_default_not_overwritten(tmp_path):
+    assert e2.output_names("clip-b32") == {"json": "metrics_v2.json", "md": "metrics_v2.md",
+                                           "pred": "predictions_v2.csv", "disagree": "disagreements_v2.csv"}
+    n = e2.output_names("siglip2-b16")
+    assert n == {"json": "metrics_v2__siglip2-b16.json", "md": "metrics_v2__siglip2-b16.md",
+                 "pred": "predictions_v2__siglip2-b16.csv", "disagree": None}
+    S, texts, X, out = _run_noisy()
+    m = _meta(out["metrics"])
+    (tmp_path / "metrics_v2.md").write_text("DEFAULT", encoding="utf-8")
+    e2.write_reports(m | {"image_encoder": "siglip2-b16"}, tmp_path, tmp_path)
+    assert (tmp_path / "metrics_v2.md").read_text(encoding="utf-8") == "DEFAULT"
+    assert not (tmp_path / "metrics_v2.json").exists()
+    js = json.loads((tmp_path / "metrics_v2__siglip2-b16.json").read_text(encoding="utf-8"))
+    assert js["image_encoder"] == "siglip2-b16"
+    assert "siglip2-b16" in (tmp_path / "metrics_v2__siglip2-b16.md").read_text(encoding="utf-8")
+    # 예측 CSV: 기본 인코더만 어긋남 CSV 를 쓴다
+    feats = tmp_path / "f"
+    e2.write_predictions(out["rows"], out["disagree_idx"], feats, "siglip2-b16")
+    assert sorted(p.name for p in feats.iterdir()) == ["predictions_v2__siglip2-b16.csv"]
+    e2.write_predictions(out["rows"], out["disagree_idx"], feats, "clip-b32")
+    assert {p.name for p in feats.iterdir()} == {"predictions_v2__siglip2-b16.csv", "predictions_v2.csv",
+                                                "disagreements_v2.csv"}
+    head = (feats / "predictions_v2.csv").read_text(encoding="utf-8").splitlines()[0].split(",")
+    assert "pred_rescue" in head and "pred_system" in head
+
+
+def test_md_has_adopted_section_and_no_leaks(tmp_path):
+    S, texts, X = _synth_noisy()
+    S = [dataclasses.replace(s, domain=f"casino-leak-{s.domain_hash}.example",
+                             domain_hash=f"hashleak{s.domain_hash}.fake") for s in S]
+    texts = [t + " OCRSECRETMARK" for t in texts]
+    m = _meta(_run(S, texts, X)["metrics"]) | {"image_encoder": "clip-b32"}
+    e2.write_reports(m, tmp_path, tmp_path)
+    md = (tmp_path / "metrics_v2.md").read_text(encoding="utf-8")
+    js = (tmp_path / "metrics_v2.json").read_text(encoding="utf-8")
+    assert md.index("채택한 판정 방식") < md.index("## 시험 세트 (전체)")
+    for row in ("글자 단독", "평균 융합(이전 방식)", "글자 우선+이미지 건지기", "전체 판정(+상표 낱말)"):
+        assert row in md
+    assert "clip-b32" in md and "t_img" in md
+    assert json.loads(js)["image_encoder"] == "clip-b32"
+    for txt in (js, md):
+        for leak in ("hashleak", ".fake", "casino-leak", "OCRSECRETMARK", "/img/", ".png"):
+            assert leak not in txt

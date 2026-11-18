@@ -56,6 +56,8 @@ python3.12 -m venv .venv-detector          # torch가 이미 있으면 --system-
 .venv-detector/bin/python -m detector embed      # CLIP 임베딩 → _features/clip
 .venv-detector/bin/python -m detector evaluate   # docs/week11/metrics.{json,md} 와 그림
 .venv-detector/bin/python -m detector evidence   # docs/week11/problem_evidence.{json,md}
+.venv-detector/bin/python -m detector embed --encoder siglip2-b16   # 다른 이미지 특징 추출기 → _features/img/<키> (`--labels` 로 라벨 파일 지정)
+.venv-detector/bin/python -m detector compare-image --encoders clip-b32,siglip2-b16,mobileclip2-s2 [--fp-budget 0.01]   # docs/week12/image_compare.{json,md}
 ```
 
 - 수집 화면은 비공개라 저장소에 없다. `~/datasets/gambling`에 두고, 기본 인덱스는 `_features/index_snapshot_20261109T1400.jsonl`이다(`--index`·`--root`로 바꿀 수 있다).

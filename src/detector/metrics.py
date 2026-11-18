@@ -63,3 +63,29 @@ def threshold_for_fpr(y_neg_scores: np.ndarray, target: float = 0.02) -> float:
     if k >= len(s):
         return float(s.min())
     return float(np.nextafter(s[k], np.inf))
+
+
+TEXT_THR = 0.5  # 글자 모델 임계값(고정). "글자 우선, 이미지는 건지기" 판정의 글자 쪽 기준
+
+
+def rescue_threshold(y: np.ndarray, p_text: np.ndarray, p_img: np.ndarray, budget: float,
+                     text_thr: float = TEXT_THR) -> float:
+    """학습 OOF 점수로 이미지 임계값 t 를 정한다: 글자가 통과시킨 음성(y==0, p_text<text_thr) 중
+    `p_img >= t` 비율이 budget 이하가 되는 가장 작은 t. 그런 음성이 없으면 inf(건지지 않음)."""
+    scores = np.asarray(p_img)[(np.asarray(y) == 0) & (np.asarray(p_text) < text_thr)]
+    return float("inf") if len(scores) == 0 else float(threshold_for_fpr(scores, budget))
+
+
+def _ratio(num: int, den: int) -> dict:
+    return {"n": int(num), "d": int(den), "rate": (num / den if den else None)}
+
+
+def rescue_stats(y: np.ndarray, p_text: np.ndarray, p_img: np.ndarray, t: float,
+                 text_thr: float = TEXT_THR) -> dict:
+    """A = 양성 중 글자가 놓친 것, B = 음성 중 글자가 통과시킨 것. t 로 A 중 건진 수, B 중 추가로 잘못 잡은 수."""
+    passed = p_text < text_thr
+    a, b = (y == 1) & passed, (y == 0) & passed
+    return {
+        "rescued": _ratio((p_img[a] >= t).sum(), a.sum()),
+        "extra_fp": _ratio((p_img[b] >= t).sum(), b.sum()),
+    }

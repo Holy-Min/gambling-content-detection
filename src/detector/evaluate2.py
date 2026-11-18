@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from .data import Sample, load_samples
-from .metrics import bootstrap_ci, confusion, f1, threshold_for_fpr
+from .metrics import TEXT_THR, bootstrap_ci, confusion, f1, rescue_stats, rescue_threshold, threshold_for_fpr
 from .models import fit_full, oof_predict
 from .rules import LEGAL_BRAND_TERMS, legal_brand_hits, legal_rule
 from .split import first_seen_from_index, make_folds, mirror_groups, time_split
@@ -27,6 +27,7 @@ MODEL_KO = {"text": "텍스트", "image": "이미지", "fusion": "융합"}
 THR_KEYS = ("0.5", "fpr2")
 STATS = ("f1", "precision", "recall", "fpr_hard_negative", "fpr_normal", "recall_deposit")
 RULE_STATS = ("f1", "precision", "recall", "fpr_hard_negative")
+DEFAULT_ENCODER = "clip-b32"
 
 
 def _clean(v: float) -> float | None:
@@ -146,12 +147,32 @@ def rule_false_hits_report(groups: dict[str, np.ndarray], rule: np.ndarray, text
     return out
 
 
+def rescue_pred(p_text: np.ndarray, p_img: np.ndarray, t_img: float) -> np.ndarray:
+    """글자 우선, 이미지는 건지기: 글자 >= 0.5 또는 이미지 >= t_img."""
+    return (p_text >= TEXT_THR) | (p_img >= t_img)
+
+
+def rescue_report(y, label, kind, hashes, p_text, p_img, t_img: float, n_boot: int) -> dict:
+    """건지기 판정의 지표(기존 STATS 와 같은 정의, 사이트 단위 부트스트랩)."""
+    p = rescue_pred(p_text, p_img, t_img).astype(float)
+    return {s: _triple(_stat_fn(s, y, label, kind, p, 0.5), hashes, n_boot) for s in STATS}
+
+
+def _clean_t(t: float) -> float | None:
+    return None if not np.isfinite(t) else float(t)
+
+
 def run_core(
     samples: list[Sample], texts: list[str], X: np.ndarray, test_mask: np.ndarray,
     n_boot: int = 1000, k: int = 5, seed: int = 42, test_until: str | None = None,
+    X_mirror: np.ndarray | None = None, fp_budget: float = 0.01,
 ) -> dict:
     """samples(이진+배너+합법 사행 전체)·texts·X 는 같은 순서. test_mask: time_split 결과(y 없는 행은 무시).
+    X_mirror 는 미러 묶음·fold 계산용 특징(기본 clip-b32 특징): 이미지 인코더를 바꿔도 fold 와 글자 예측이 같게 한다.
+    없으면 X 를 쓴다. fp_budget 은 건지기 판정의 이미지 임계값 t_img 를 정하는 오탐 예산.
     test_until 은 기록용(마스크는 호출자가 time_split 으로 만든다)."""
+    if X_mirror is None:
+        X_mirror = X
     y_all = np.array([-1 if s.y is None else s.y for s in samples])
     texts_a = np.array(texts, dtype=object)
     hashes_all = np.array([s.domain_hash for s in samples], dtype=object)
@@ -166,7 +187,7 @@ def run_core(
 
     # 학습 세트 OOF (미러 묶음 단위 fold) → 지표 + 임계값 사전 고정
     tr_samples = [samples[i] for i in tr_i]
-    tr_gid = mirror_groups(hashes_all[tr_i], X[tr_i], list(texts_a[tr_i]))
+    tr_gid = mirror_groups(hashes_all[tr_i], X_mirror[tr_i], list(texts_a[tr_i]))
     folds = make_folds(tr_samples, k=k, seed=seed, groups=tr_gid)
     oof = oof_predict(list(texts_a[tr_i]), X[tr_i], y_all[tr_i], folds)
     neg = y_all[tr_i] == 0
@@ -186,7 +207,7 @@ def run_core(
 
     # 미러 여부: 학습+시험 이진 표본 전체의 묶음에서, 학습 사이트와 같은 묶음인 시험 사이트
     bin_i = np.concatenate([tr_i, te_i])
-    gid_all = mirror_groups(hashes_all[bin_i], X[bin_i], list(texts_a[bin_i]))
+    gid_all = mirror_groups(hashes_all[bin_i], X_mirror[bin_i], list(texts_a[bin_i]))
     train_groups = set(gid_all[: len(tr_i)].tolist())
     mirror_te = np.array([g in train_groups for g in gid_all[len(tr_i):]], dtype=bool)
 
@@ -214,6 +235,34 @@ def run_core(
     metrics["legal"] = banner_report(P_lg, hashes_all[lg_i], thr, n_boot)
     metrics["legal"]["rule"] = _rate_pair(rule_all[lg_i], hashes_all[lg_i], n_boot)
 
+    # 글자 우선 + 이미지 건지기: t_img 는 학습 OOF 로만 정한다(시험·배너·합법 사행은 쓰지 않음)
+    t_img = rescue_threshold(y_all[tr_i], oof["text"], oof["image"], fp_budget)
+    rescue: dict = {
+        "t_img": _clean_t(t_img), "fp_budget": fp_budget, "text_thr": TEXT_THR,
+        "train_oof": rescue_report(y_all[tr_i], label_all[tr_i], kind_all[tr_i], hashes_all[tr_i],
+                                   oof["text"], oof["image"], t_img, n_boot),
+        "counts": {"train_oof": rescue_stats(y_all[tr_i], oof["text"], oof["image"], t_img),
+                   "test": rescue_stats(y_all[te_i], P_te["text"], P_te["image"], t_img)},
+    }
+    for key, mask in (("test", np.ones(len(te_i), bool)), ("test_mirror", mirror_te), ("test_unseen", ~mirror_te)):
+        sel = te_i[mask]
+        rescue[key] = rescue_report(y_all[sel], label_all[sel], kind_all[sel], hashes_all[sel],
+                                    P_te["text"][mask], P_te["image"][mask], t_img, n_boot)
+    metrics["rescue"] = rescue
+
+    # 전체 판정 = 건지기 OR 상표 낱말 규칙
+    def system_pred(ix: np.ndarray, P: dict) -> np.ndarray:
+        return rescue_pred(P["text"], P["image"], t_img) | rule_all[ix]
+    system: dict = {}
+    for key, mask in (("test", np.ones(len(te_i), bool)), ("test_unseen", ~mirror_te)):
+        sel = te_i[mask]
+        p = system_pred(sel, {m: P_te[m][mask] for m in ("text", "image")}).astype(float)
+        system[key] = {s: _triple(_stat_fn(s, y_all[sel], label_all[sel], kind_all[sel], p, 0.5), hashes_all[sel], n_boot)
+                       for s in RULE_STATS}
+    system["legal"] = _rate_pair(system_pred(lg_i, P_lg), hashes_all[lg_i], n_boot)
+    system["banner"] = _rate_pair(system_pred(ba_i, P_ba), hashes_all[ba_i], n_boot)
+    metrics["system"] = system
+
     def pick(ix: np.ndarray, lab: str) -> np.ndarray:
         return ix[label_all[ix] == lab]
     metrics["rule_false_hits"] = rule_false_hits_report(
@@ -227,11 +276,14 @@ def run_core(
     # 행 단위 결과(비공개 CSV 용). 원래 샘플 순서 유지.
     n = len(samples)
     rows = {"p_text": [None] * n, "p_image": [None] * n, "p_fusion": [None] * n,
-            "split": [None] * n, "mirror_of_train": [""] * n, "rule_hit": rule_all.astype(int).tolist()}
+            "split": [None] * n, "mirror_of_train": [""] * n, "rule_hit": rule_all.astype(int).tolist(),
+            "pred_rescue": [None] * n, "pred_system": [None] * n}
     for ix, P, name in ((tr_i, oof, "train"), (te_i, P_te, "test"), (ba_i, P_ba, "banner"), (lg_i, P_lg, "legal")):
         for j, i in enumerate(ix):
             rows["split"][i] = name
             rows["p_text"][i], rows["p_image"][i], rows["p_fusion"][i] = (float(P[m][j]) for m in MODELS)
+            rows["pred_rescue"][i] = int(rescue_pred(P["text"][j], P["image"][j], t_img))
+            rows["pred_system"][i] = int(rows["pred_rescue"][i] or rule_all[i])
     for j, i in enumerate(te_i):
         rows["mirror_of_train"][i] = int(mirror_te[j])
     rows["id"] = [s.id for s in samples]
@@ -285,16 +337,69 @@ def _subset_md(title: str, r: dict) -> list[str]:
     return lines
 
 
+def output_names(key: str) -> dict:
+    """산출 파일 이름. 기본 인코더는 접미사 없이, 다른 인코더는 `__<키>` 를 붙여 기본 파일을 덮어쓰지 않는다.
+    어긋남 CSV 는 기본 인코더일 때만 쓴다(None 이면 안 씀)."""
+    sfx = "" if key == DEFAULT_ENCODER else f"__{key}"
+    return {"json": f"metrics_v2{sfx}.json", "md": f"metrics_v2{sfx}.md", "pred": f"predictions_v2{sfx}.csv",
+            "disagree": "disagreements_v2.csv" if key == DEFAULT_ENCODER else None}
+
+
+def _adopted_md(m: dict) -> list[str]:
+    """맨 위 '채택한 판정 방식' 절: 한 줄 정의, 인코더, t_img, 시험 세트 요약 표."""
+    r, enc = m["rescue"], m.get("image_encoder", DEFAULT_ENCODER)
+    t = "-" if r["t_img"] is None else f"{r['t_img']:.4f}"
+    tm = m["test"]["models"]
+    rows = (("글자 단독", tm["text"]["0.5"]), ("평균 융합(이전 방식)", tm["fusion"]["0.5"]),
+            ("글자 우선+이미지 건지기", r["test"]), ("전체 판정(+상표 낱말)", m["system"]["test"]))
+    lines = ["## 채택한 판정 방식", "",
+             "판정 = `글자>=0.5 OR 이미지>=t_img OR 합법 사행 상표 낱말`", "",
+             f"- 이미지 인코더: {enc}",
+             f"- t_img: {t} (학습 OOF 에서, 글자가 통과시킨 음성 중 이미지가 t_img 이상인 비율이 {r['fp_budget']:.1%} 이하가 되는 가장 작은 값)",
+             "", "시험 세트(전체), 신뢰구간은 사이트 단위 부트스트랩 95%", "",
+             "| 판정 | F1 | 정밀도 | 재현율 | 하드 네거티브 오탐률 |", "|---|---|---|---|---|"]
+    for name, d in rows:
+        lines.append(f"| {name} | " + " | ".join(_cell(d[s]) for s in RULE_STATS) + " |")
+    return lines + [""]
+
+
+def _rescue_system_md(m: dict) -> list[str]:
+    r, sy = m["rescue"], m["system"]
+    t = "-" if r["t_img"] is None else f"{r['t_img']:.4f}"
+    md = ["## 글자 우선 + 이미지 건지기 (상세)", "",
+          f"- 글자 임계값 {r['text_thr']} 고정, t_img = {t} (학습 OOF 에서만 정함, 오탐 예산 {r['fp_budget']:.1%})", "",
+          "| 구분 | 건진 도박 화면 / 글자가 놓친 도박 화면 | 추가 오탐 / 글자가 통과시킨 음성 화면 |", "|---|---|---|"]
+    for key, nm in (("train_oof", "학습 OOF"), ("test", "시험(전체)")):
+        c = r["counts"][key]
+        md.append(f"| {nm} | {c['rescued']['n']}/{c['rescued']['d']} ({_pct(c['rescued']['rate'])}) "
+                  f"| {c['extra_fp']['n']}/{c['extra_fp']['d']} ({_pct(c['extra_fp']['rate'])}) |")
+    md += ["", "| 구분 | " + " | ".join(STATS) + " |", "|---|" + "---|" * len(STATS)]
+    for key, nm in (("train_oof", "학습 OOF"), ("test", "시험(전체)"), ("test_mirror", "시험(주소만 바꾼 사이트)"),
+                    ("test_unseen", "시험(처음 보는 사이트)")):
+        md.append(f"| {nm} | " + " | ".join(_cell(r[key][s]) for s in STATS) + " |")
+    md += ["", "## 전체 판정 = 건지기 OR 상표 낱말 규칙 (상세)", "",
+           "| 구분 | " + " | ".join(RULE_STATS) + " |", "|---|" + "---|" * len(RULE_STATS)]
+    for key, nm in (("test", "시험(전체)"), ("test_unseen", "시험(처음 보는 사이트)")):
+        md.append(f"| {nm} | " + " | ".join(_cell(sy[key][s]) for s in RULE_STATS) + " |")
+    md += ["", "| 묶음 | 켜진 화면 비율 | 한 화면이라도 켜진 사이트 비율 |", "|---|---|---|"]
+    for key, nm in (("legal", "합법 사행"), ("banner", "배너")):
+        md.append(f"| {nm} | {_cell(sy[key]['screen_rate'])} | {_cell(sy[key]['site_rate'])} |")
+    return md + [""]
+
+
 def write_reports(metrics: dict, out_dir: Path, repo: Path) -> None:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "metrics_v2.json").write_text(
+    names = output_names(metrics.get("image_encoder", DEFAULT_ENCODER))
+    (out_dir / names["json"]).write_text(
         json.dumps(metrics, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
     md = ["# 2차 기준선 지표 (metrics_v2)", ""]
     md += [f"- 색인: {metrics['index']}, 라벨: {metrics['labels']}, 시험 기준일: {metrics['cutoff']} 이상 첫 수집"
            f", 상한: {metrics['test_until'] or '없음'} 이하 첫 수집",
            f"- 임계값(학습 OOF 오탐 2%): " + ", ".join(f"{MODEL_KO[m]} {v:.4f}" for m, v in metrics["thr_fpr2"].items()),
+           f"- 이미지 인코더: {metrics.get('image_encoder', DEFAULT_ENCODER)}",
            "- 신뢰구간: 사이트(domain_hash) 단위 부트스트랩 1,000회, 95%", ""]
+    md += _adopted_md(metrics)
     md += _prev_table(repo, metrics)
     md += _subset_md("시험 세트 (전체)", metrics["test"])
     md += _subset_md("시험 세트: 주소만 바꾼 사이트(학습 사이트와 같은 미러 묶음)", metrics["test_mirror"])
@@ -340,8 +445,9 @@ def write_reports(metrics: dict, out_dir: Path, repo: Path) -> None:
                 md.append(f"| {'0.5' if tk == '0.5' else 'OOF 2%'} | {nm} | "
                           + " | ".join(_cell(r[tk][name][s]) for s in RULE_STATS) + " |")
         md.append("")
+    md += _rescue_system_md(metrics)
     md += [f"어긋남 목록(학습 세트, OOF 융합): {metrics['n_disagreements']}화면 (비공개 CSV)", ""]
-    (out_dir / "metrics_v2.md").write_text("\n".join(md), encoding="utf-8")
+    (out_dir / names["md"]).write_text("\n".join(md), encoding="utf-8")
 
 
 def _write_csv(path: Path, header: list[str], rows) -> None:
@@ -352,11 +458,23 @@ def _write_csv(path: Path, header: list[str], rows) -> None:
         w.writerows(rows)
 
 
+def write_predictions(rows: dict, disagree_idx: list[int], feats: Path, key: str) -> None:
+    """비공개 CSV. 어긋남 CSV 는 기본 인코더일 때만 쓴다."""
+    names = output_names(key)
+    cols = ["id", "domain_hash", "label", "split", "mirror_of_train", "page_kind", "rule_hit",
+            "p_text", "p_image", "p_fusion", "pred_rescue", "pred_system"]
+    _write_csv(Path(feats) / names["pred"], cols, zip(*(rows[c] for c in cols)))
+    if names["disagree"]:
+        dcols = ["id", "domain_hash", "label", "page_kind", "p_text", "p_image", "p_fusion", "full_path"]
+        _write_csv(Path(feats) / names["disagree"], dcols, ([rows[c][i] for c in dcols] for i in disagree_idx))
+
+
 def evaluate2(
     index_path: Path = DEFAULT_INDEX, dataset_root: Path = HOME, labels_path: Path = DEFAULT_LABELS,
     cutoff: str = DEFAULT_CUTOFF, out_dir: Path | None = None, test_until: str | None = DEFAULT_TEST_UNTIL,
+    image_encoder: str = DEFAULT_ENCODER, fp_budget: float = 0.01,
 ) -> dict:
-    from .embed import embed_images
+    from .embed import embed_with
     from .ocr import run_ocr
 
     repo = Path(__file__).resolve().parents[2]
@@ -364,17 +482,14 @@ def evaluate2(
     feats = Path(dataset_root) / "_features"
     samples = load_samples(index_path, dataset_root, include_embedded=True, labels_path=labels_path)
     ocr = run_ocr(samples, feats / "ocr")
-    X = embed_images(samples, feats / "clip")
+    X = embed_with(samples, feats, image_encoder)
+    X_mirror = X if image_encoder == DEFAULT_ENCODER else embed_with(samples, feats, DEFAULT_ENCODER)
     texts = [ocr[s.id]["text"] for s in samples]
     test_mask = time_split(samples, cutoff, first_seen_from_index(index_path), until=test_until)
-    out = run_core(samples, texts, X, test_mask, test_until=test_until)
-    m, rows = out["metrics"], out["rows"]
+    out = run_core(samples, texts, X, test_mask, test_until=test_until, X_mirror=X_mirror, fp_budget=fp_budget)
+    m = out["metrics"]
     m |= {"cutoff": cutoff, "index": Path(index_path).name, "labels": Path(labels_path).name,
-          "n_disagreements": len(out["disagree_idx"])}
+          "n_disagreements": len(out["disagree_idx"]), "image_encoder": image_encoder}
     write_reports(m, out_dir, repo)
-    cols = ["id", "domain_hash", "label", "split", "mirror_of_train", "page_kind", "rule_hit", "p_text", "p_image", "p_fusion"]
-    _write_csv(feats / "predictions_v2.csv", cols, zip(*(rows[c] for c in cols)))
-    dcols = ["id", "domain_hash", "label", "page_kind", "p_text", "p_image", "p_fusion", "full_path"]
-    _write_csv(feats / "disagreements_v2.csv", dcols,
-               ([rows[c][i] for c in dcols] for i in out["disagree_idx"]))
+    write_predictions(out["rows"], out["disagree_idx"], feats, image_encoder)
     return m
