@@ -1,0 +1,35 @@
+group,unit,key,name,current,proposed,pages,reason
+A,site,68ba3d7e0d45,7luck.com,hard_negative,gambling,2,합법 사행(카지노 안내) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,008c4c5be44a,betman.co.kr,hard_negative,gambling,22,합법 사행(스포츠토토 발매) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,c1690c90943b,dhlottery.co.kr,hard_negative,gambling,13,합법 사행(복권) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,8f4036967b49,hoiana.com,hard_negative,gambling,10,합법 사행(카지노 리조트 안내) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,4401a5bea7a4,kboat.or.kr,hard_negative,gambling,18,합법 사행(경정) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,bf4876bfc35a,kcycle.or.kr,hard_negative,gambling,15,합법 사행(경륜) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,442013eea546,kra.co.kr,hard_negative,gambling,4,합법 사행(경마) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,b033085dd09b,ntry.com,hard_negative,gambling,8,합법 사행(파워볼 게임) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,19102ce2da74,powerball.com,hard_negative,gambling,5,합법 사행(해외 복권) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,120669e8350f,sportstoto.co.kr,hard_negative,gambling,7,합법 사행(스포츠토토) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+A,site,d09f4f860434,wisetoto.com,hard_negative,gambling,15,합법 사행(토토 정보·발매 연계) — 판정 대상을 도박 화면 전반으로 넓힘(11/9)
+B,screen,009f5ba41893_20260930T171015_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 잠시만 기다리십시오…
+B,screen,88cc99f8bf23_20261028T141326_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,88cc99f8bf23_20261028T142006_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,82eb06ef2de8_20261102T224305_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,dba498fee7e8_20261103T103448_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,9b8e7c777f39_20261103T103511_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,993f31b7372f_20261109T141426_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,9b8e7c777f39_20261109T142443_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,993f31b7372f_20261111T103722_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,9b8e7c777f39_20261111T104306_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,2831e8b940ec_20261111T170746_1,,hard_negative,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 잠시만 기다리십시오…
+B,screen,82eb06ef2de8_20261113T135249_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,dba498fee7e8_20261113T140156_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,f067af31d655_20261113T141343_0,,embedded_banner,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: BunnyCDN Node KR1-11
+B,screen,82eb06ef2de8_20261116T104556_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,88cc99f8bf23_20261116T105245_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,dba498fee7e8_20261116T105440_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+B,screen,45cc7513c938_20261117T111750_2,,hard_negative,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 잠시만 기다리십시오…
+B,screen,993f31b7372f_20261118T145022_0,,gambling,exclude,1,봇 확인·접근 거부·CDN 오류 화면이 ok 로 저장됨: 사용자 확인
+C,site,eaacd8017fc9,,gambling,embedded_banner,12,무료 영화 다시보기 사이트에 도박 배너가 실린 것(1차 오류 분석에서 발견)
+C,site,acf4d36c3f04,,gambling,exclude,7,카지노 비교·리뷰 사이트(추천 순위·리뷰는 수집 대상 아님)
+C,site,2fd53dff660c,,gambling,exclude,6,바카라 정보 글 게시판(설명 글은 수집 대상 아님)
+C,screen,009f5ba41893_20261118T144926_3,,gambling,exclude,1,도박 사이트의 약관·정책 글 화면(도박 요소가 보이지 않음)
