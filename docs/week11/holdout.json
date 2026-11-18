@@ -1,0 +1,339 @@
+{
+  "cutoff": "2026-11-09T14:00",
+  "train_screens": 475,
+  "holdout_screens": 137,
+  "rules": {
+    "mean": "두 확률의 평균 >= 0.5 (현재)",
+    "text": "텍스트 확률 >= 0.5",
+    "and": "텍스트 >= 0.5 그리고 이미지 >= 0.5"
+  },
+  "subsets": {
+    "all": {
+      "mean": {
+        "n": {
+          "gambling": 84,
+          "hard_negative": 34,
+          "normal": 19
+        },
+        "domains": {
+          "gambling": 45,
+          "hard_negative": 16,
+          "normal": 8
+        },
+        "n_deposit": 20,
+        "recall": 0.9642857142857143,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.029411764705882353,
+        "normal_fpr": 0.05263157894736842,
+        "precision": 0.9759036144578314,
+        "f1": 0.9700598802395209,
+        "recall_ci": [
+          0.9199885057471264,
+          1.0,
+          1000
+        ],
+        "hn_fpr_ci": [
+          0.0,
+          0.09090909090909091,
+          1000
+        ]
+      },
+      "text": {
+        "n": {
+          "gambling": 84,
+          "hard_negative": 34,
+          "normal": 19
+        },
+        "domains": {
+          "gambling": 45,
+          "hard_negative": 16,
+          "normal": 8
+        },
+        "n_deposit": 20,
+        "recall": 1.0,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.029411764705882353,
+        "normal_fpr": 0.0,
+        "precision": 0.9882352941176471,
+        "f1": 0.9940828402366864,
+        "recall_ci": [
+          1.0,
+          1.0,
+          1000
+        ],
+        "hn_fpr_ci": [
+          0.0,
+          0.09090909090909091,
+          1000
+        ]
+      },
+      "and": {
+        "n": {
+          "gambling": 84,
+          "hard_negative": 34,
+          "normal": 19
+        },
+        "domains": {
+          "gambling": 45,
+          "hard_negative": 16,
+          "normal": 8
+        },
+        "n_deposit": 20,
+        "recall": 0.9642857142857143,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.029411764705882353,
+        "normal_fpr": 0.0,
+        "precision": 0.9878048780487805,
+        "f1": 0.9759036144578314,
+        "recall_ci": [
+          0.9199885057471264,
+          1.0,
+          1000
+        ],
+        "hn_fpr_ci": [
+          0.0,
+          0.09090909090909091,
+          1000
+        ]
+      }
+    },
+    "new_domain": {
+      "mean": {
+        "n": {
+          "gambling": 13,
+          "hard_negative": 7,
+          "normal": 0
+        },
+        "domains": {
+          "gambling": 7,
+          "hard_negative": 4,
+          "normal": 0
+        },
+        "n_deposit": 1,
+        "recall": 0.9230769230769231,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.14285714285714285,
+        "normal_fpr": NaN,
+        "precision": 0.9230769230769231,
+        "f1": 0.9230769230769231
+      },
+      "text": {
+        "n": {
+          "gambling": 13,
+          "hard_negative": 7,
+          "normal": 0
+        },
+        "domains": {
+          "gambling": 7,
+          "hard_negative": 4,
+          "normal": 0
+        },
+        "n_deposit": 1,
+        "recall": 1.0,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.14285714285714285,
+        "normal_fpr": NaN,
+        "precision": 0.9285714285714286,
+        "f1": 0.9629629629629629
+      },
+      "and": {
+        "n": {
+          "gambling": 13,
+          "hard_negative": 7,
+          "normal": 0
+        },
+        "domains": {
+          "gambling": 7,
+          "hard_negative": 4,
+          "normal": 0
+        },
+        "n_deposit": 1,
+        "recall": 0.9230769230769231,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.14285714285714285,
+        "normal_fpr": NaN,
+        "precision": 0.9230769230769231,
+        "f1": 0.9230769230769231
+      }
+    },
+    "no_near_dup": {
+      "mean": {
+        "n": {
+          "gambling": 39,
+          "hard_negative": 27,
+          "normal": 13
+        },
+        "domains": {
+          "gambling": 24,
+          "hard_negative": 14,
+          "normal": 7
+        },
+        "n_deposit": 6,
+        "recall": 0.9230769230769231,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.037037037037037035,
+        "normal_fpr": 0.07692307692307693,
+        "precision": 0.9473684210526315,
+        "f1": 0.935064935064935
+      },
+      "text": {
+        "n": {
+          "gambling": 39,
+          "hard_negative": 27,
+          "normal": 13
+        },
+        "domains": {
+          "gambling": 24,
+          "hard_negative": 14,
+          "normal": 7
+        },
+        "n_deposit": 6,
+        "recall": 1.0,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.037037037037037035,
+        "normal_fpr": 0.0,
+        "precision": 0.975,
+        "f1": 0.9873417721518988
+      },
+      "and": {
+        "n": {
+          "gambling": 39,
+          "hard_negative": 27,
+          "normal": 13
+        },
+        "domains": {
+          "gambling": 24,
+          "hard_negative": 14,
+          "normal": 7
+        },
+        "n_deposit": 6,
+        "recall": 0.9230769230769231,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.037037037037037035,
+        "normal_fpr": 0.0,
+        "precision": 0.972972972972973,
+        "f1": 0.9473684210526315
+      }
+    }
+  },
+  "oof_context": {
+    "A": {
+      "mean": {
+        "n": {
+          "gambling": 263,
+          "hard_negative": 138,
+          "normal": 74
+        },
+        "domains": {
+          "gambling": 78,
+          "hard_negative": 25,
+          "normal": 8
+        },
+        "n_deposit": 40,
+        "recall": 0.8859315589353612,
+        "deposit_recall": 1.0,
+        "hn_fpr": 0.15217391304347827,
+        "normal_fpr": 0.12162162162162163,
+        "precision": 0.8859315589353612,
+        "f1": 0.8859315589353612
+      },
+      "text": {
+        "n": {
+          "gambling": 263,
+          "hard_negative": 138,
+          "normal": 74
+        },
+        "domains": {
+          "gambling": 78,
+          "hard_negative": 25,
+          "normal": 8
+        },
+        "n_deposit": 40,
+        "recall": 0.8935361216730038,
+        "deposit_recall": 0.975,
+        "hn_fpr": 0.15942028985507245,
+        "normal_fpr": 0.05405405405405406,
+        "precision": 0.9003831417624522,
+        "f1": 0.8969465648854962
+      },
+      "and": {
+        "n": {
+          "gambling": 263,
+          "hard_negative": 138,
+          "normal": 74
+        },
+        "domains": {
+          "gambling": 78,
+          "hard_negative": 25,
+          "normal": 8
+        },
+        "n_deposit": 40,
+        "recall": 0.8250950570342205,
+        "deposit_recall": 0.975,
+        "hn_fpr": 0.036231884057971016,
+        "normal_fpr": 0.013513513513513514,
+        "precision": 0.9730941704035875,
+        "f1": 0.8930041152263375
+      }
+    },
+    "B": {
+      "mean": {
+        "n": {
+          "gambling": 263,
+          "hard_negative": 138,
+          "normal": 74
+        },
+        "domains": {
+          "gambling": 78,
+          "hard_negative": 25,
+          "normal": 8
+        },
+        "n_deposit": 40,
+        "recall": 0.8365019011406845,
+        "deposit_recall": 0.95,
+        "hn_fpr": 0.15942028985507245,
+        "normal_fpr": 0.06756756756756757,
+        "precision": 0.8906882591093117,
+        "f1": 0.8627450980392157
+      },
+      "text": {
+        "n": {
+          "gambling": 263,
+          "hard_negative": 138,
+          "normal": 74
+        },
+        "domains": {
+          "gambling": 78,
+          "hard_negative": 25,
+          "normal": 8
+        },
+        "n_deposit": 40,
+        "recall": 0.8783269961977186,
+        "deposit_recall": 0.975,
+        "hn_fpr": 0.10869565217391304,
+        "normal_fpr": 0.0,
+        "precision": 0.9390243902439024,
+        "f1": 0.9076620825147348
+      },
+      "and": {
+        "n": {
+          "gambling": 263,
+          "hard_negative": 138,
+          "normal": 74
+        },
+        "domains": {
+          "gambling": 78,
+          "hard_negative": 25,
+          "normal": 8
+        },
+        "n_deposit": 40,
+        "recall": 0.7946768060836502,
+        "deposit_recall": 0.925,
+        "hn_fpr": 0.028985507246376812,
+        "normal_fpr": 0.0,
+        "precision": 0.9812206572769953,
+        "f1": 0.8781512605042017
+      }
+    }
+  }
+}

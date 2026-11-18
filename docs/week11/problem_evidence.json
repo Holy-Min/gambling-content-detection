@@ -1,0 +1,35 @@
+{
+  "gambling_domains_total": 121,
+  "status_counts": {
+    "open": 78,
+    "blocked_kr": 8,
+    "challenge": 30,
+    "error": 5
+  },
+  "open_share": 0.9069767441860465,
+  "open_share_sensitivity": {
+    "latest_status": {
+      "open": 70,
+      "blocked_kr": 10,
+      "share": 0.875
+    },
+    "blocked_if_never_open": {
+      "open": 78,
+      "blocked_kr": 18,
+      "share": 0.8125
+    }
+  },
+  "embedded_seeds": 26,
+  "banner_links": 282,
+  "banner_link_domains_unique": 37,
+  "blocked_and_open": 16,
+  "banner_promoted_gambling": 43,
+  "rotation_groups": {
+    "groups": 11,
+    "domains": 22
+  },
+  "redirected": 12,
+  "captured_from": "2026-09-30",
+  "captured_to": "2026-11-03",
+  "seeds_ref_sha": "196dcb2599bb0e2474d24194465fcf9a88d11a1c"
+}
